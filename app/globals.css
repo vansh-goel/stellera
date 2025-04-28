@@ -1,26 +1,138 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: 230 25% 7%;
+  --foreground: 210 40% 98%;
+  --card: 230 25% 9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 230 25% 9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 245 72% 59%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 230 34% 14%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 230 25% 15%;
+  --muted-foreground: 217.9 32.6% 70%;
+  --accent: 245 72% 59%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 230 25% 18%;
+  --input: 230 25% 18%;
+  --ring: 245 72% 59%;
+  --radius: 0.5rem;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  /* Fix dropdown and popover styles */
+  [data-radix-popper-content-wrapper] {
+    z-index: 100 !important;
+  }
+  
+  /* Ensure dropdown content has solid background */
+  [role="menu"],
+  [role="dialog"],
+  [role="listbox"],
+  [role="combobox"] {
+    background-color: hsl(var(--card)) !important;
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+    backdrop-filter: none !important;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.dark {
+  --background: 230 25% 7%;
+  --foreground: 210 40% 98%;
+  --card: 230 25% 9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 230 25% 9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 245 72% 59%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 230 34% 14%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 230 25% 15%;
+  --muted-foreground: 217.9 32.6% 70%;
+  --accent: 245 72% 59%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 230 25% 18%;
+  --input: 230 25% 18%;
+  --ring: 245 72% 59%;
+}
+
+/* Glowing accent effect */
+.glow {
+  position: relative;
+}
+
+.glow::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  right: -5px;
+  bottom: -5px;
+  z-index: -1;
+  background: hsl(var(--primary));
+  filter: blur(15px);
+  opacity: 0.15;
+  border-radius: inherit;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(to right, #c084fc, #818cf8, #60a5fa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Animate gradient for cosmic buttons */
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 6s ease infinite;
+}
+
+/* Planet elements */
+.planet {
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 25px rgba(97, 93, 194, 0.2);
+}
+
+.planet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  pointer-events: none;
 }
