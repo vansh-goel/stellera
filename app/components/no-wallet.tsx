@@ -1,91 +1,115 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/app/components/ui/button"
-import { useWallet } from "@/app/providers/wallet-provider"
-import { Wallet, Import } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/app/components/ui/dialog"
-import { Input } from "@/app/components/ui/input"
-import { Label } from "@/app/components/ui/label"
+import { useWallet } from "../providers/wallet-provider"
+import { Button } from "./ui/button"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
+import { Particles } from "./particles"
 
 export function NoWallet() {
   const { createAccount, importWallet } = useWallet()
-  const [isImportOpen, setIsImportOpen] = useState(false)
   const [secretKey, setSecretKey] = useState("")
-  const [accountName, setAccountName] = useState("")
+  const [isImporting, setIsImporting] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleImport = async () => {
-    if (secretKey && accountName) {
-      await importWallet(secretKey, accountName)
+  const handleCreateWallet = async () => {
+    try {
+      await createAccount()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create wallet")
+    }
+  }
+
+  const handleImportWallet = async () => {
+    try {
+      if (!secretKey) {
+        setError("Please enter a valid secret key")
+        return
+      }
+      await importWallet(secretKey, "Imported Wallet")
       setSecretKey("")
-      setAccountName("")
-      setIsImportOpen(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import wallet")
     }
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-8 p-4">
-      <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold">Welcome to Stellera</h1>
-        <p className="text-xl text-muted-foreground">
+    <div className="fixed inset-0 bg-background flex items-center justify-center">
+      {/* Background particles */}
+      <Particles />
+      
+      {/* Background gradient effects */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-primary/5 blur-3xl"></div>
+        <div className="absolute top-1/3 left-1/4 h-64 w-64 rounded-full bg-indigo-500/5 blur-3xl"></div>
+        <div className="absolute bottom-40 left-20 h-72 w-72 rounded-full bg-purple-500/5 blur-3xl"></div>
+      </div>
+
+      <div className="relative z-10 bg-white/5 backdrop-blur-xl p-8 rounded-2xl border border-white/10 max-w-md w-full shadow-2xl">
+        <h1 className="text-3xl font-bold text-gray-200 mb-2 text-center">
+          Welcome to Stellera
+        </h1>
+        <p className="text-gray-400 text-center mb-8">
           Create or import a wallet to get started
         </p>
-      </div>
-      
-      <div className="flex gap-4">
-        <Button
-          size="lg"
-          className="gap-2"
-          onClick={createAccount}
-        >
-          <Wallet className="h-5 w-5" />
-          Create Wallet
-        </Button>
 
-        <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
-          <DialogTrigger asChild>
-            <Button
-              size="lg"
-              variant="outline"
-              className="gap-2"
-            >
-              <Import className="h-5 w-5" />
-              Import Wallet
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Import Wallet</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="secretKey">Secret Key</Label>
-                <Input
-                  id="secretKey"
-                  type="password"
-                  value={secretKey}
-                  onChange={(e) => setSecretKey(e.target.value)}
-                  placeholder="Enter your secret key"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="accountName">Account Name</Label>
-                <Input
-                  id="accountName"
-                  value={accountName}
-                  onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="Enter account name"
-                />
-              </div>
-              <Button 
-                onClick={handleImport}
-                disabled={!secretKey || !accountName}
-              >
-                Import Wallet
-              </Button>
+        <div className="space-y-6">
+          <Button
+            onClick={handleCreateWallet}
+            className="w-full bg-primary hover:bg-primary/90"
+          >
+            Create New Wallet
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/10"></div>
             </div>
-          </DialogContent>
-        </Dialog>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-background text-gray-400">or</span>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setIsImporting(!isImporting)}
+            >
+              {isImporting ? "Cancel Import" : "Import Existing Wallet"}
+            </Button>
+
+            {isImporting && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="secretKey" className="text-gray-400">
+                    Secret Key
+                  </Label>
+                  <Input
+                    id="secretKey"
+                    type="password"
+                    value={secretKey}
+                    onChange={(e) => setSecretKey(e.target.value)}
+                    placeholder="Enter your secret key"
+                    className="bg-white/5 border-white/10"
+                  />
+                </div>
+                <Button
+                  onClick={handleImportWallet}
+                  className="w-full"
+                  disabled={!secretKey}
+                >
+                  Import Wallet
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <p className="text-red-400 text-sm text-center">{error}</p>
+          )}
+        </div>
       </div>
     </div>
   )

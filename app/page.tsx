@@ -14,7 +14,7 @@ export default function Home() {
 
   return (
     <div className="container mx-auto">
-      {hasWallet ? <Dashboard /> : <CreateWallet />}
+      <Dashboard />
     </div>
   )
 }
