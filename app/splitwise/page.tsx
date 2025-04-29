@@ -255,6 +255,15 @@ export default function SplitwisePage() {
     setPaymentDialogOpen(true)
   }
 
+  // Callback after payment is complete - force immediate update
+  const handlePaymentComplete = async () => {
+    await fetchDuesNotifications()
+    // If we're not on the payment tab, switch to it to show updated state
+    if (activeTab !== "pay") {
+      setActiveTab("pay")
+    }
+  }
+
   // Fetch notifications when tab changes or user loads
   useEffect(() => {
     if (currentUser && (activeTab === "pay" || activeTab === "home")) {
@@ -268,15 +277,41 @@ export default function SplitwisePage() {
       // Initial fetch
       fetchDuesNotifications()
       
-      // Set up polling every 20 seconds
+      // Set up polling every 30 seconds (changed from 20 seconds)
       const interval = setInterval(() => {
         fetchDuesNotifications()
-      }, 20000)
+      }, 30000)
       
       // Clean up on unmount or when user changes
       return () => clearInterval(interval)
     }
   }, [currentUser])
+
+  // Add listener for account switching
+  useEffect(() => {
+    const handleAccountSwitch = () => {
+      // This will trigger a re-fetch when localStorage changes
+      fetchDuesNotifications()
+    }
+    
+    // Add event listener for storage changes (account switching)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (event) => {
+        if (event.key === 'stellera_last_used_account') {
+          handleAccountSwitch()
+        }
+      })
+      
+      // Clean up
+      return () => {
+        window.removeEventListener('storage', (event) => {
+          if (event.key === 'stellera_last_used_account') {
+            handleAccountSwitch()
+          }
+        })
+      }
+    }
+  }, [])
 
   // Loading state
   if (isLoadingUser) {
@@ -533,22 +568,22 @@ export default function SplitwisePage() {
                   }}
                 >
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-3 ${
-                    notification.type === 'payment_sent'
+                    notification.type === 'payment_sent' || notification.status === 'paid'
                       ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400' 
                       : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400'
                   }`}>
-                    {notification.type === 'payment_sent' ? '↑' : '↓'}
+                    {notification.type === 'payment_sent' || notification.status === 'paid' ? '↑' : '↓'}
                   </div>
                   
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between">
                       <div className="font-medium truncate">
-                        {notification.type === 'payment_sent' ? 'Payment Sent' : 'Payment Received'}
+                        {notification.type === 'payment_sent' ? 'Payment Sent' : (notification.status === 'paid' ? 'Payment Sent' : 'Payment Received')}
                       </div>
                       <div className="text-xs text-muted-foreground">{timeAgo}</div>
                     </div>
                     <div className="text-sm mt-1">
-                      {notification.type === 'payment_sent'
+                      {notification.type === 'payment_sent' || notification.status === 'paid'
                         ? `${notification.description}`
                         : `${notification.issuerName} paid you ${notification.amount} ${notification.asset} for ${notification.description}`
                       }
@@ -556,7 +591,7 @@ export default function SplitwisePage() {
                     <div className="flex justify-between items-center mt-2">
                       <span className="font-bold">{notification.amount} {notification.asset}</span>
                       <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                        {notification.type === 'payment_sent' ? 'To: ' : 'From: '}{notification.issuerName}
+                        {notification.type === 'payment_sent' || notification.status === 'paid' ? 'To: ' : 'From: '}{notification.issuerName}
                       </span>
                     </div>
                   </div>
@@ -712,7 +747,7 @@ export default function SplitwisePage() {
           amount={selectedNotification.amount}
           asset={selectedNotification.asset}
           description={selectedNotification.description}
-          onPaymentComplete={fetchDuesNotifications}
+          onPaymentComplete={handlePaymentComplete}
           notificationId={selectedNotification._id}
         />
       )}

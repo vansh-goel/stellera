@@ -160,6 +160,7 @@ export default function PaymentDialog({
             },
             body: JSON.stringify({
               status: 'paid',
+              read: true,
               txHash: result.hash
             })
           })

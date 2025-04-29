@@ -18,13 +18,25 @@ export async function GET(request: NextRequest) {
     const duesNotifications = await Notification.find({
       recipient,
       type: { $in: ['split_bill', 'payment_request'] },
-      read: false // Only show unread/unpaid notifications
+      $or: [
+        { status: { $ne: 'paid' } },
+        { status: { $exists: false } }
+      ]
     }).sort({ createdAt: -1 });
     
     // Find history of paid notifications
     const paidNotifications = await Notification.find({
-      recipient,
-      type: 'payment_sent'
+      $or: [
+        { 
+          recipient,
+          type: 'payment_sent'
+        },
+        {
+          recipient,
+          type: { $in: ['split_bill', 'payment_request'] },
+          status: 'paid'
+        }
+      ]
     }).sort({ createdAt: -1 });
     
     return NextResponse.json({ 

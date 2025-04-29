@@ -93,10 +93,45 @@ export default function NFTTicketsPage() {
   const [isCreatingTrustline, setIsCreatingTrustline] = useState(false)
   const [trustlineAsset, setTrustlineAsset] = useState<{code: string, issuer: string} | null>(null)
   
-  // Fetch user's events and tickets when wallet connects
+  // Store lastKnownPublicKey to detect wallet changes
+  const [lastKnownPublicKey, setLastKnownPublicKey] = useState<string | null>(null)
+  
+  // Fetch user's events and tickets when wallet connects or changes
   useEffect(() => {
     if (isConnected && publicKey) {
+      const walletChanged = lastKnownPublicKey !== publicKey
+      
+      if (walletChanged) {
+        console.log("Wallet changed or connected. Previous:", lastKnownPublicKey, "Current:", publicKey)
+        setLastKnownPublicKey(publicKey)
+        // Reset states when wallet changes
+        setMyEvents([])
+        setReceivedTickets([])
+      }
+      
       fetchMyEventsAndTickets()
+    }
+  }, [isConnected, publicKey])
+  
+  // Set up polling for data refresh
+  useEffect(() => {
+    if (isConnected && publicKey) {
+      console.log("Setting up polling for events and tickets refresh every 30 seconds")
+      
+      // Initial fetch
+      fetchMyEventsAndTickets()
+      
+      // Set up interval for polling
+      const intervalId = setInterval(() => {
+        console.log("Polling: Refreshing events and tickets data")
+        fetchMyEventsAndTickets()
+      }, 30000) // Poll every 30 seconds
+      
+      // Clean up interval on component unmount or when wallet disconnects
+      return () => {
+        console.log("Clearing polling interval")
+        clearInterval(intervalId)
+      }
     }
   }, [isConnected, publicKey])
   

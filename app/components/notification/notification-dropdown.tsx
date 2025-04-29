@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { Bell } from 'lucide-react'
+import { Bell, RefreshCw } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { 
   DropdownMenu, 
@@ -25,11 +25,22 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
   const [isLoading, setIsLoading] = useState(false)
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const [selectedNotification, setSelectedNotification] = useState<NotificationWithId | null>(null)
+  const [paymentCompleted, setPaymentCompleted] = useState(false)
 
   const fetchNotifications = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch(`/api/notifications?recipient=${userId}`)
+      
+      // Get current wallet address from localStorage to ensure we're using the latest
+      let currentUserId = userId
+      if (typeof window !== 'undefined') {
+        const currentWallet = localStorage.getItem('stellera_last_used_account')
+        if (currentWallet) {
+          currentUserId = currentWallet
+        }
+      }
+      
+      const response = await fetch(`/api/notifications?recipient=${currentUserId}`)
       const data = await response.json()
       
       if (data.notifications) {
@@ -72,19 +83,76 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
       markAsRead([notification._id])
     }
     
-    if (notification.type === 'payment_request' || notification.type === 'split_bill') {
+    if (notification.type === 'payment_request' || notification.type === 'split_bill' || notification.type === 'payment_sent' || notification.type === 'payment_received') {
       setSelectedNotification(notification)
       setPaymentDialogOpen(true)
     }
   }
 
+  const handlePaymentComplete = async () => {
+    setPaymentCompleted(true)
+    // Refresh notifications after payment is complete
+    await fetchNotifications()
+    // Close the payment dialog
+    setPaymentDialogOpen(false)
+  }
+
   useEffect(() => {
-    if (userId) {
+    // Always fetch when component mounts or userId changes
+    fetchNotifications()
+    
+    // Poll for notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000)
+    
+    // Create event handlers for wallet changes
+    const handleWalletChange = () => {
       fetchNotifications()
+    }
+    
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'stellera_last_used_account') {
+        fetchNotifications()
+      }
+    }
+    
+    // For cleanup
+    let walletCheckInterval: NodeJS.Timeout | null = null
+    
+    if (typeof window !== 'undefined') {
+      // Listen for storage events from other tabs/windows
+      window.addEventListener('storage', handleStorageChange)
       
-      // Poll for notifications every 30 seconds
-      const interval = setInterval(fetchNotifications, 30000)
-      return () => clearInterval(interval)
+      // Listen for our custom event for same-window changes
+      window.addEventListener('walletChanged', handleWalletChange)
+      
+      // Check for wallet changes periodically as a fallback
+      walletCheckInterval = setInterval(() => {
+        const currentWallet = localStorage.getItem('stellera_last_used_account')
+        if (currentWallet && currentWallet !== userId) {
+          fetchNotifications()
+        }
+      }, 2000)
+    }
+    
+    return () => {
+      clearInterval(interval)
+      if (walletCheckInterval) {
+        clearInterval(walletCheckInterval)
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', handleStorageChange)
+        window.removeEventListener('walletChanged', handleWalletChange)
+      }
+    }
+  }, [userId])
+
+  // Trigger a custom event when the wallet changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const currentWallet = localStorage.getItem('stellera_last_used_account')
+      if (currentWallet && currentWallet !== userId) {
+        window.dispatchEvent(new Event('walletChanged'))
+      }
     }
   }, [userId])
 
@@ -119,15 +187,25 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
         <DropdownMenuContent align="end" className="w-80">
           <div className="flex items-center justify-between px-4 py-2 border-b">
             <h3 className="font-semibold">Notifications</h3>
-            {unreadCount > 0 && (
+            <div className="flex gap-2">
               <Button 
                 variant="ghost" 
-                size="sm" 
-                onClick={() => markAsRead(notifications.filter(n => !n.read).map(n => n._id))}
+                size="icon"
+                onClick={fetchNotifications}
+                disabled={isLoading}
               >
-                Mark all as read
+                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               </Button>
-            )}
+              {unreadCount > 0 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => markAsRead(notifications.filter(n => !n.read).map(n => n._id))}
+                >
+                  Mark all as read
+                </Button>
+              )}
+            </div>
           </div>
           
           <div className="max-h-96 overflow-y-auto py-1">
@@ -185,6 +263,8 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
           amount={selectedNotification.amount}
           asset={selectedNotification.asset}
           description={selectedNotification.description}
+          notificationId={selectedNotification._id}
+          onPaymentComplete={handlePaymentComplete}
         />
       )}
     </>
