@@ -11,7 +11,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Recipient parameter is required' }, { status: 400 });
     }
     
-    await connectToDatabase();
+    // Make sure to await the database connection before querying
+    const mongoose = await connectToDatabase();
     
     // Find dues notifications (where the user needs to pay)
     const duesNotifications = await Notification.find({

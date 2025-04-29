@@ -11,7 +11,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: 'Notification ID is required' }, { status: 400 });
     }
     
-    await connectToDatabase();
+    const mongoose = await connectToDatabase();
     
     const notification = await Notification.findByIdAndUpdate(
       id, 

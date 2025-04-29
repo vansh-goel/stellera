@@ -118,67 +118,93 @@ export function Dashboard() {
     }
   }
   
-  // Prepare a payment transaction
+  // Handle sending payment
   const handleSendPayment = async () => {
-    if (!recipient || !amount || !publicKey || !currentAccount) {
-      toast.error("Please enter recipient and amount")
-      return
+    if (!isConnected || !publicKey || !sign || !currentAccount) {
+      toast.error("Wallet not connected");
+      return;
     }
-
+    
     try {
       setIsSendingPayment(true);
-      const amountNum = parseFloat(amount)
       
-      if (isNaN(amountNum) || amountNum <= 0) {
-        toast.error("Please enter a valid amount")
-        return
+      // Validate recipient
+      let destinationAddress = recipient;
+      
+      // If recipient starts with @, resolve username to address
+      if (recipient.startsWith('@')) {
+        if (!resolvedRecipient) {
+          throw new Error("Username cannot be resolved");
+        }
+        destinationAddress = resolvedRecipient;
       }
       
-      // Use resolved address if it exists, otherwise use the recipient input
-      const actualRecipient = resolvedRecipient || recipient
-      
-      // Check if destination account exists
-      let createAccount = false;
-      try {
-        const server = new Horizon.Server(horizonUrl);
-        await server.loadAccount(actualRecipient);
-      } catch (error: any) {
-        if (error.status === 404) {
-          createAccount = true;
-          if (selectedAsset !== "native") {
-            toast.error("New accounts can only be created with XLM")
-            return
-          }
-          if (amountNum < 1) {
-            toast.error("New accounts require at least 1 XLM")
-            return
-          }
-          toast.info("Destination account does not exist. This will create a new account.")
-        } else {
-          throw error;
-        }
+      // Validate amount
+      if (!amount || parseFloat(amount) <= 0) {
+        throw new Error("Amount must be greater than 0");
       }
       
       // Create payment transaction
       const { transaction, network_passphrase } = await createPaymentTransaction({
         source: publicKey,
-        destination: actualRecipient,
+        destination: destinationAddress,
         amount,
-        asset: selectedAsset,
-        memo
-      })
+        asset: selectedAsset === "native" ? "native" : selectedAsset,
+        memo: memo || undefined
+      });
       
-      // Directly process the transaction
-      await processTransaction(transaction, network_passphrase)
-      setShowPaymentModal(false)
-      resetPaymentForm()
+      // Sign transaction
+      const signedTransaction = await sign({
+        transactionXDR: transaction,
+        network: network_passphrase,
+        pincode: "1234" // In a real app, this would be user input
+      });
+      
+      // Submit transaction
+      const result = await submitTransaction(signedTransaction);
+      
+      if (result.successful) {
+        toast.success("Payment sent successfully!");
+        
+        // Track XLM spending for rewards if the asset is XLM
+        if (selectedAsset === "native") {
+          try {
+            await fetch('/api/rewards', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                walletAddress: publicKey,
+                txHash: result.hash,
+                xlmAmount: parseFloat(amount),
+                description: memo || "Payment"
+              })
+            });
+          } catch (error) {
+            console.error("Error tracking rewards:", error);
+            // Don't fail the payment if rewards tracking fails
+          }
+        }
+        
+        // Reset form
+        setRecipient("");
+        setResolvedRecipient("");
+        setAmount("");
+        setMemo("");
+        setSelectedAsset("native");
+        setShowPaymentModal(false);
+        setRefreshTrigger(Date.now()); // Trigger refresh of transactions
+      } else {
+        throw new Error("Transaction failed");
+      }
     } catch (error: any) {
-      console.error("Failed to create transaction:", error)
-      toast.error(`Failed to create transaction: ${error.message || "Unknown error"}`)
+      console.error("Payment error:", error);
+      toast.error(error.message || "Failed to send payment");
     } finally {
       setIsSendingPayment(false);
     }
-  }
+  };
   
   // Prepare a trustline transaction
   const handleAddTrustline = async () => {

@@ -298,7 +298,6 @@ export default function SplitwisePage() {
           <span className="text-sm font-medium">
             Hi! {currentUser?.displayName ?? "Guest"}
           </span>
-          {currentUser && <NotificationDropdown userId={currentUser._id} />}
         </div>
       </div>
 
@@ -550,7 +549,7 @@ export default function SplitwisePage() {
                     </div>
                     <div className="text-sm mt-1">
                       {notification.type === 'payment_sent'
-                        ? `You paid ${notification.issuerName} ${notification.amount} ${notification.asset} for ${notification.description}`
+                        ? `${notification.description}`
                         : `${notification.issuerName} paid you ${notification.amount} ${notification.asset} for ${notification.description}`
                       }
                     </div>

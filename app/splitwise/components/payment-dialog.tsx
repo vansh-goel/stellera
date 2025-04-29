@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/app/components/ui/button'
 import { Label } from '@/app/components/ui/label'
 import { Input } from '@/app/components/ui/input'
-import { CheckCircle, Loader2 } from 'lucide-react'
+import { CheckCircle, Loader2, CoinsIcon } from 'lucide-react'
 import { useWallet } from '@/app/providers/wallet-provider'
 import { createPaymentTransaction, submitTransaction } from '@/lib/stellar-transactions'
 import { toast } from 'sonner'
@@ -38,9 +38,50 @@ export default function PaymentDialog({
   const [isComplete, setIsComplete] = useState(false)
   const [memo, setMemo] = useState(description)
   const [transactionError, setTransactionError] = useState<string | null>(null)
+  const [rewardEarned, setRewardEarned] = useState<number | null>(null)
   
   // Get wallet provider functions
   const { wallet, isConnected, publicKey, sign, currentAccount } = useWallet()
+
+  // Track the spending for SLR rewards
+  const trackRewardSpending = async (txHash: string, amount: number, description: string) => {
+    try {
+      // Get current user ID from localStorage
+      const walletAddress = typeof window !== 'undefined' ? 
+        localStorage.getItem('stellera_last_used_account') : publicKey;
+      
+      if (!walletAddress) return null;
+      
+      // Only track if the asset is XLM
+      if (asset.toLowerCase() !== 'xlm') return null;
+      
+      // Call the rewards API to track spending
+      const response = await fetch('/api/rewards', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          walletAddress,
+          txHash,
+          xlmAmount: amount,
+          description
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to track rewards');
+      }
+      
+      const data = await response.json();
+      
+      // Return the SLR tokens issued (if any)
+      return data.slrIssued > 0 ? data.slrIssued : null;
+    } catch (error) {
+      console.error('Error tracking rewards:', error);
+      return null;
+    }
+  };
 
   const handlePayment = async () => {
     if (!isConnected || !publicKey || !sign || !currentAccount) {
@@ -72,12 +113,12 @@ export default function PaymentDialog({
         memo: memo || description
       })
       
-      // Sign transaction with wallet - using as any to bypass type checks
-      // The wallet provider likely handles the pincode internally
+      // Sign transaction with wallet
       const signedTransaction = await sign({
         transactionXDR: transaction,
         network: network_passphrase,
-      } as any)
+        pincode: "1234" // In a real app, this would be user input
+      })
       
       // Submit transaction to network
       const result = await submitTransaction(signedTransaction)
@@ -124,6 +165,14 @@ export default function PaymentDialog({
           })
         }
         
+        // Track spending for SLR rewards
+        if (asset.toLowerCase() === 'xlm') {
+          const slrIssued = await trackRewardSpending(result.hash, amount, description);
+          if (slrIssued) {
+            setRewardEarned(slrIssued);
+          }
+        }
+        
         setIsComplete(true)
         
         // Call the onPaymentComplete callback if provided
@@ -150,6 +199,7 @@ export default function PaymentDialog({
         setIsComplete(false)
         setMemo(description)
         setTransactionError(null)
+        setRewardEarned(null)
       }, 300)
     }
   }
@@ -169,6 +219,21 @@ export default function PaymentDialog({
             <p className="text-center">
               Your payment of {amount} {asset} to {recipient} was successful!
             </p>
+            
+            {rewardEarned && asset.toLowerCase() === 'xlm' && (
+              <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border rounded-lg text-center">
+                <div className="flex items-center justify-center mb-2">
+                  <CoinsIcon className="h-5 w-5 text-amber-500 mr-2" />
+                  <span className="font-medium">Rewards Earned!</span>
+                </div>
+                <p className="text-sm">
+                  You've earned {rewardEarned} SLR for this transaction.
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Visit the Rewards section to view your SLR balance.
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="grid gap-4 py-4">
@@ -207,6 +272,16 @@ export default function PaymentDialog({
                 onChange={(e) => setMemo(e.target.value)}
               />
             </div>
+            
+            {asset.toLowerCase() === 'xlm' && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md text-sm flex items-start">
+                <CoinsIcon className="h-4 w-4 text-amber-500 mr-2 mt-0.5" />
+                <div>
+                  <p>You'll earn 1 SLR token for every 100 XLM spent.</p>
+                  <p className="text-xs text-muted-foreground mt-1">SLR tokens can be used for rewards and discounts.</p>
+                </div>
+              </div>
+            )}
             
             {!isConnected && (
               <div className="p-3 bg-amber-100 text-amber-800 rounded-md text-sm">

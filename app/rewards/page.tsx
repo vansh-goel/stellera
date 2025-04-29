@@ -1,7 +1,22 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/app/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs"
+import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog"
+import { Label } from "@/app/components/ui/label"
+import { Input } from "@/app/components/ui/input"
+import { Loader2, CoinsIcon, HistoryIcon, RefreshCw, ArrowRightIcon } from "lucide-react"
+import { toast } from "sonner"
+import { useWallet } from "@/app/providers/wallet-provider"
+import { createChangeTrustTransaction, createPaymentTransaction, submitTransaction } from "@/lib/stellar-transactions"
+import { Horizon, Asset } from "@stellar/stellar-sdk"
+import { Particles } from "@/app/components/particles"
+
+// Constants for SLR token
+const SLR_ASSET_CODE = "SLR"
+const SLR_ISSUER_WALLET = "GCCXFUMJG3YT7NWK37VFBMSLXI7HBOH6FBQHDEMTMR4ZQWVFHHTC5O2X" // This would be set to the actual issuer wallet in a real app
 
 type RewardProgram = {
   id: string
@@ -27,7 +42,23 @@ type ActivityItem = {
   date: string
 }
 
+type UserBalance = {
+  asset_type: string
+  asset_code?: string
+  asset_issuer?: string
+  balance: string
+}
+
 export default function RewardsPage() {
+  // Wallet state
+  const { wallet, isConnected, publicKey, sign, currentAccount } = useWallet()
+  const [isLoading, setIsLoading] = useState(false)
+  const [hasTrustline, setHasTrustline] = useState(false)
+  const [slrBalance, setSlrBalance] = useState("0")
+  const [xlmSpent, setXlmSpent] = useState(0)
+  const [showCreateTrustlineDialog, setShowCreateTrustlineDialog] = useState(false)
+  
+  // Reward programs state
   const [rewardPrograms, setRewardPrograms] = useState<RewardProgram[]>([
     {
       id: "rp1",
@@ -132,8 +163,106 @@ export default function RewardsPage() {
   const [selectedProgram, setSelectedProgram] = useState<string>(rewardPrograms[0]?.id || "")
   const [showRedeemConfirm, setShowRedeemConfirm] = useState(false)
   const [selectedReward, setSelectedReward] = useState<RewardProgram["rewardOptions"][0] | null>(null)
+  const [currentTab, setCurrentTab] = useState("slr")
   
   const totalPoints = rewardPrograms.reduce((acc, program) => acc + program.pointsEarned, 0)
+  
+  // Load user's SLR balance and trustline status
+  useEffect(() => {
+    if (isConnected && publicKey) {
+      checkTrustlineAndBalance();
+    }
+  }, [isConnected, publicKey]);
+  
+  // Calculate XLM spent from activity history (for demonstration purposes)
+  useEffect(() => {
+    // In a real app, this would come from tracking actual transactions
+    // For demo purposes, we'll calculate a random amount based on points
+    const calculatedSpent = activityHistory.reduce((acc, activity) => {
+      if (activity.type === 'earn') {
+        return acc + (activity.points * 4); // Each point is roughly 4 XLM in our example
+      }
+      return acc;
+    }, 0);
+    
+    setXlmSpent(calculatedSpent);
+  }, [activityHistory]);
+  
+  // Check if user has SLR trustline and get balance
+  const checkTrustlineAndBalance = async () => {
+    if (!publicKey) return;
+    
+    try {
+      setIsLoading(true);
+      const server = new Horizon.Server("https://horizon-testnet.stellar.org");
+      const account = await server.loadAccount(publicKey);
+      
+      // Check if user has SLR trustline
+      const slrTrustline = account.balances.find((balance: UserBalance) => 
+        balance.asset_type !== 'native' && 
+        balance.asset_code === SLR_ASSET_CODE && 
+        balance.asset_issuer === SLR_ISSUER_WALLET
+      );
+      
+      setHasTrustline(!!slrTrustline);
+      if (slrTrustline) {
+        setSlrBalance(slrTrustline.balance);
+      }
+    } catch (error) {
+      console.error("Error checking trustline:", error);
+      toast.error("Failed to check SLR trustline");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Create trustline for SLR
+  const createTrustline = async () => {
+    if (!publicKey || !currentAccount) {
+      toast.error("Wallet not connected");
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      // Create a transaction to establish trustline
+      const { transaction, network_passphrase } = await createChangeTrustTransaction({
+        source: publicKey,
+        asset: `${SLR_ASSET_CODE}:${SLR_ISSUER_WALLET}`,
+      });
+      
+      // Sign and submit the transaction
+      const signedXDR = await sign({
+        transactionXDR: transaction,
+        network: network_passphrase,
+        pincode: "1234", // In a real app, this would be user input
+      });
+      
+      const result = await submitTransaction(signedXDR);
+      
+      if (result.successful) {
+        toast.success("Successfully established SLR trustline");
+        setHasTrustline(true);
+        setShowCreateTrustlineDialog(false);
+        // Re-check balance after a short delay to allow for network propagation
+        setTimeout(() => checkTrustlineAndBalance(), 2000);
+      } else {
+        throw new Error("Transaction failed");
+      }
+    } catch (error) {
+      console.error("Error creating trustline:", error);
+      toast.error("Failed to create SLR trustline");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Calculate how many SLR coins user has earned
+  const calculateEarnedSLR = () => {
+    // 1 SLR for every 100 XLM spent
+    return Math.floor(xlmSpent / 100);
+  };
   
   const handleRedeemReward = (reward: RewardProgram["rewardOptions"][0]) => {
     const program = rewardPrograms.find(p => p.id === selectedProgram)
@@ -173,184 +302,208 @@ export default function RewardsPage() {
   }
   
   return (
-    <div className="container mx-auto space-y-8">
-      <h1 className="text-3xl font-bold tracking-tight">Rewards</h1>
+    <div className="container mx-auto space-y-8 px-4 py-8">
+      <Particles />
+      <h1 className="text-3xl font-bold tracking-tight mb-4">Rewards</h1>
       
-      {/* Points Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white/10 rounded-xl border shadow-sm p-6">
-          <h2 className="text-xl font-semibold mb-2">Total Points</h2>
-          <div className="text-4xl font-bold text-primary mb-4">
-            {totalPoints}
-          </div>
-          <div className="space-y-3">
-            {rewardPrograms.map(program => (
-              <div key={program.id} className="flex justify-between items-center">
-                <span>{program.name}</span>
-                <span className="font-medium">{program.pointsEarned} points</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+          <TabsTrigger value="slr">SLR Tokens</TabsTrigger>
+        </TabsList>
         
-        <div className="bg-white/10 rounded-xl border shadow-sm p-6">
-          <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
-          <div className="space-y-3 max-h-[200px] overflow-y-auto">
-            {activityHistory.slice(0, 5).map(activity => (
-              <div key={activity.id} className="flex justify-between items-center text-sm">
-                <div>
-                  <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs mr-2 ${activity.type === 'earn' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'}`}>
-                    {activity.type === 'earn' ? 'Earned' : 'Redeemed'}
-                  </span>
-                  {activity.description}
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className={activity.type === 'earn' ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}>
-                    {activity.type === 'earn' ? '+' : ''}{activity.points}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    · {new Date(activity.date).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      
-      {/* Rewards Programs */}
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Rewards Programs</h2>
-          <div>
-            <select 
-              value={selectedProgram}
-              onChange={(e) => setSelectedProgram(e.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              {rewardPrograms.map(program => (
-                <option key={program.id} value={program.id}>
-                  {program.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        
-        {selectedProgram && (
-          <div className="bg-white/10 rounded-xl border shadow-sm overflow-hidden">
-            {rewardPrograms.map(program => (
-              program.id === selectedProgram && (
-                <div key={program.id}>
-                  {program.rewardImageUrl && (
-                    <div 
-                      className="h-40 bg-cover bg-center"
-                      style={{ backgroundImage: `url(${program.rewardImageUrl})` }}
-                    />
-                  )}
-                  
-                  <div className="p-6">
-                    <div className="flex justify-between items-center mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold">{program.name}</h3>
-                        <p className="text-sm text-muted-foreground">{program.description}</p>
-                      </div>
-                      <div className="text-xl font-bold text-primary">
-                        {program.pointsEarned} points
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <h4 className="font-medium mb-2">How to Earn Points</h4>
-                        <ul className="space-y-2 text-sm">
-                          {program.conditions.map((condition, idx) => (
-                            <li key={idx} className="flex items-start gap-2">
-                              <div className="rounded-full bg-primary/10 p-1 text-primary mt-0.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
-                                  <polyline points="20 6 9 17 4 12"></polyline>
-                                </svg>
-                              </div>
-                              {condition}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      
-                      <div>
-                        <h4 className="font-medium mb-2">Available Rewards</h4>
-                        <div className="space-y-3">
-                          {program.rewardOptions.map(reward => (
-                            <div key={reward.id} className="flex justify-between border rounded-lg p-3">
-                              <div className="flex gap-3">
-                                {reward.imageUrl && (
-                                  <div 
-                                    className="h-12 w-12 bg-cover bg-center rounded"
-                                    style={{ backgroundImage: `url(${reward.imageUrl})` }}
-                                  />
-                                )}
-                                <div>
-                                  <div className="font-medium">{reward.name}</div>
-                                  <div className="text-xs text-muted-foreground">{reward.description}</div>
-                                </div>
-                              </div>
-                              <div className="flex flex-col items-end justify-between">
-                                <div className="text-sm font-medium">
-                                  {reward.pointsCost} points
-                                </div>
-                                <Button 
-                                  size="sm" 
-                                  variant={program.pointsEarned >= reward.pointsCost ? "default" : "outline"}
-                                  disabled={program.pointsEarned < reward.pointsCost}
-                                  onClick={() => handleRedeemReward(reward)}
-                                >
-                                  Redeem
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+        <TabsContent value="slr" className="space-y-6">
+          {/* SLR Token Information */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+            <Card className="border shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                  <CoinsIcon className="h-5 w-5 text-amber-500" />
+                  Stellera Coin (SLR)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-sm text-muted-foreground mb-1">Your Balance</div>
+                    <div className="text-3xl font-bold">
+                      {isLoading ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      ) : hasTrustline ? (
+                        `${Number(slrBalance).toFixed(2)} SLR`
+                      ) : (
+                        "No trustline"
+                      )}
                     </div>
                   </div>
+                  
+                  <div className="border-t pt-4">
+                    <div className="text-sm text-muted-foreground mb-1">Reward Rate</div>
+                    <div className="text-lg">1 SLR per 100 XLM spent</div>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <div className="text-sm text-muted-foreground mb-1">XLM Spent (Tracked)</div>
+                    <div className="text-lg font-medium">{xlmSpent.toFixed(2)} XLM</div>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <div className="text-sm text-muted-foreground mb-1">SLR Earned</div>
+                    <div className="text-lg font-medium">{calculateEarnedSLR()} SLR</div>
+                  </div>
+                  
+                  {!hasTrustline && isConnected && (
+                    <Button 
+                      className="w-full mt-4" 
+                      onClick={() => setShowCreateTrustlineDialog(true)}
+                    >
+                      Create SLR Trustline
+                    </Button>
+                  )}
+                  
+                  {hasTrustline && isConnected && (
+                    <Button 
+                      className="w-full mt-4" 
+                      variant="outline"
+                      onClick={checkTrustlineAndBalance}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" /> Refresh Balance
+                    </Button>
+                  )}
+                  
+                  {!isConnected && (
+                    <div className="text-center text-muted-foreground mt-4">
+                      Connect your wallet to manage SLR tokens
+                    </div>
+                  )}
                 </div>
-              )
-            ))}
+              </CardContent>
+            </Card>
+            
+            <Card className="border shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                  <HistoryIcon className="h-5 w-5 text-blue-500" />
+                  About Stellera Coin
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <p>
+                    Stellera Coin (SLR) is our platform's reward token, issued on the Stellar network.
+                  </p>
+                  
+                  <div className="border-t pt-4">
+                    <h3 className="font-medium mb-2">How to Earn SLR</h3>
+                    <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                      <li>Automatically earn 1 SLR for every 100 XLM you spend in transactions</li>
+                      <li>Complete special offers and promotions</li>
+                      <li>Participate in community activities</li>
+                    </ul>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <h3 className="font-medium mb-2">Benefits of SLR</h3>
+                    <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                      <li>Reduced transaction fees on the platform</li>
+                      <li>Access to exclusive features and services</li>
+                      <li>Trade or transfer to other users</li>
+                      <li>Use as collateral in certain DeFi applications</li>
+                    </ul>
+                  </div>
+                  
+                  <div className="border-t pt-4 text-xs text-muted-foreground">
+                    <p className="mb-1">SLR Asset Details:</p>
+                    <p>Code: {SLR_ASSET_CODE}</p>
+                    <p className="break-all">Issuer: {SLR_ISSUER_WALLET}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        )}
-      </div>
+          
+          {/* Recent SLR Activity (placeholder) */}
+          <Card className="border shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xl font-semibold">Recent SLR Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* This would be populated with actual SLR transactions in a real implementation */}
+                <div className="text-center text-muted-foreground py-8">
+                  {isConnected ? (
+                    hasTrustline ? "No SLR activity yet" : "Create a trustline to start earning SLR"
+                  ) : (
+                    "Connect your wallet to view SLR activity"
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
       
-      {/* Redemption Confirmation Modal */}
-      {showRedeemConfirm && selectedReward && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background p-6 rounded-xl shadow-lg max-w-md w-full">
-            <h2 className="text-xl font-semibold mb-4">Confirm Redemption</h2>
-            <div className="mb-4">
+      {/* Redemption Confirmation Dialog */}
+      {selectedReward && (
+        <Dialog open={showRedeemConfirm} onOpenChange={setShowRedeemConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm Redemption</DialogTitle>
+            </DialogHeader>
+            
+            <div className="py-4">
               <p>
-                You are about to redeem <span className="font-semibold">{selectedReward.name}</span> for <span className="font-semibold">{selectedReward.pointsCost} points</span>.
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                This action cannot be undone. Your points will be deducted immediately.
+                Are you sure you want to redeem <span className="font-medium">{selectedReward.name}</span> for <span className="font-medium">{selectedReward.pointsCost} points</span>?
               </p>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button 
-                type="button" 
-                variant="outline"
-                onClick={() => {
-                  setShowRedeemConfirm(false)
-                  setSelectedReward(null)
-                }}
-              >
-                Cancel
-              </Button>
-              <Button onClick={confirmRedemption}>
-                Confirm Redemption
-              </Button>
-            </div>
-          </div>
-        </div>
+            
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowRedeemConfirm(false)}>Cancel</Button>
+              <Button onClick={confirmRedemption}>Confirm</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
+      
+      {/* Create Trustline Dialog */}
+      <Dialog open={showCreateTrustlineDialog} onOpenChange={setShowCreateTrustlineDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create SLR Trustline</DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            <p>
+              To receive Stellera Coin (SLR) rewards, you need to create a trustline for the asset on your Stellar account.
+            </p>
+            
+            <div className="bg-muted/30 p-4 rounded-md space-y-2">
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Asset Code:</span>
+                <span className="font-mono">{SLR_ASSET_CODE}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Issuer:</span>
+                <span className="font-mono text-xs truncate max-w-[200px]">{SLR_ISSUER_WALLET}</span>
+              </div>
+            </div>
+            
+            <p className="text-sm text-muted-foreground">
+              This will create a transaction on the Stellar network. You will need to review and sign it to proceed.
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateTrustlineDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={createTrustline}
+              disabled={isLoading}
+            >
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Trustline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 
