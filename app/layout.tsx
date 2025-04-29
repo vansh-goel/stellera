@@ -8,7 +8,7 @@ import { Toaster } from "./components/toaster"
 import { PincodeProvider } from "./providers/pincode-provider"
 import { PincodeGuard } from "./components/pincode-guard"
 import { Navbar } from "./components/navbar"
-
+import { Particles } from "./components/particles"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
@@ -31,6 +31,7 @@ export default function RootLayout({
                 <div className="relative min-h-screen flex flex-col">
                   <main className="flex-1 pt-5">
                     <WalletState>
+                      <Particles />
                       {children}
                     </WalletState>
                   </main>

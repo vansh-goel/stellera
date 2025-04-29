@@ -17,6 +17,16 @@ const navItems = [
     ),
   },
   {
+    title: "Username Pay",
+    href: "/username-pay",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+        <circle cx="12" cy="8" r="5" />
+        <path d="M20 21a8 8 0 0 0-16 0" />
+      </svg>
+    ),
+  },
+  {
     title: "Splitwise",
     href: "/splitwise",
     icon: (
@@ -39,16 +49,6 @@ const navItems = [
         <path d="M14.5 6.5v6" />
         <path d="M4 14h10" />
         <path d="M15 18v.01" />
-      </svg>
-    ),
-  },
-  {
-    title: "Username Pay",
-    href: "/username-pay",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-        <circle cx="12" cy="8" r="5" />
-        <path d="M20 21a8 8 0 0 0-16 0" />
       </svg>
     ),
   },

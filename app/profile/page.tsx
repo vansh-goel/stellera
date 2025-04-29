@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { useWallet } from '@/app/providers/wallet-provider'
 import { UsernameManager } from '@/app/components/username-manager'
+import { DisplayNameManager } from '@/app/components/display-name-manager'
 import { Copy, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-
+import { Particles } from '@/app/components/particles'
 export default function ProfilePage() {
   const { isConnected, publicKey, currentAccount } = useWallet()
   const router = useRouter()
@@ -49,6 +50,7 @@ export default function ProfilePage() {
   
   return (
     <div className="container mx-auto py-6 space-y-8">
+      <Particles />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Your Profile</h1>
         <p className="text-muted-foreground mt-1">Manage your profile settings and preferences</p>
@@ -102,8 +104,9 @@ export default function ProfilePage() {
       
       {/* Tabs for different settings */}
       <Tabs defaultValue="username" value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
+        <TabsList className="mb-6 bg-white/20 backdrop-blur-sm rounded-lg">
           <TabsTrigger value="username">Username</TabsTrigger>
+          <TabsTrigger value="display-name">Display Name</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
@@ -128,6 +131,32 @@ export default function ProfilePage() {
                   <li>Easier payments - receive funds using @username instead of a long public key</li>
                   <li>Better recognition - create a memorable identity on the Stellar network</li>
                   <li>Simplified sharing - share your username easily with friends and contacts</li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="display-name" className="space-y-6">
+          <div className="grid grid-cols-1 gap-6">
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Display Name Settings</h2>
+              <p className="text-muted-foreground mb-6">
+                Set a display name to personalize your notifications and payment history.
+                Your display name will be shown in places where you interact with other users.
+              </p>
+              <DisplayNameManager />
+            </div>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Display Name Benefits</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 list-disc pl-5">
+                  <li>Personal touch - use your real name or nickname in notifications</li>
+                  <li>Better recognition - make it easier for friends to identify you</li>
+                  <li>Enhanced experience - provide context for your split bills and payments</li>
                 </ul>
               </CardContent>
             </Card>

@@ -5,7 +5,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/app/components/ui/button'
 import { Label } from '@/app/components/ui/label'
 import { Input } from '@/app/components/ui/input'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Loader2 } from 'lucide-react'
+import { useWallet } from '@/app/providers/wallet-provider'
+import { createPaymentTransaction, submitTransaction } from '@/lib/stellar-transactions'
+import { toast } from 'sonner'
+import StellarSdk from '@stellar/stellar-sdk'
 
 interface PaymentDialogProps {
   open: boolean
@@ -15,6 +19,8 @@ interface PaymentDialogProps {
   amount: number
   asset: string
   description: string
+  onPaymentComplete?: () => void
+  notificationId?: string
 }
 
 export default function PaymentDialog({
@@ -24,41 +30,113 @@ export default function PaymentDialog({
   recipientWallet,
   amount,
   asset,
-  description
+  description,
+  onPaymentComplete,
+  notificationId
 }: PaymentDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
   const [memo, setMemo] = useState(description)
+  const [transactionError, setTransactionError] = useState<string | null>(null)
+  
+  // Get wallet provider functions
+  const { wallet, isConnected, publicKey, sign, currentAccount } = useWallet()
 
   const handlePayment = async () => {
+    if (!isConnected || !publicKey || !sign || !currentAccount) {
+      toast.error("Wallet not connected. Please connect your wallet first.")
+      return
+    }
+
     try {
       setIsLoading(true)
+      setTransactionError(null)
       
-      // TODO: Integrate with your Stellar payment system
-      // This is a placeholder for the actual payment process
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // Check that we have all necessary data
+      if (!recipientWallet) {
+        throw new Error("Recipient wallet address is missing")
+      }
       
-      // Create a payment sent notification
-      await fetch('/api/notifications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          recipient: 'currentUserId', // This should be the current user's ID
-          type: 'payment_sent',
-          amount,
-          asset,
-          issuerWallet: recipientWallet,
-          issuerName: recipient,
-          description: `You paid ${recipient} ${amount} ${asset} for ${description}`,
-          read: true,
-        })
+      // Validate amount
+      const amountToSend = amount.toString()
+      if (parseFloat(amountToSend) <= 0) {
+        throw new Error("Amount must be greater than 0")
+      }
+      
+      // Create payment transaction
+      const { transaction, network_passphrase } = await createPaymentTransaction({
+        source: publicKey,
+        destination: recipientWallet,
+        amount: amountToSend,
+        asset: "native", // Currently only supporting XLM
+        memo: memo || description
       })
       
-      setIsComplete(true)
-    } catch (error) {
+      // Sign transaction with wallet - using as any to bypass type checks
+      // The wallet provider likely handles the pincode internally
+      const signedTransaction = await sign({
+        transactionXDR: transaction,
+        network: network_passphrase,
+      } as any)
+      
+      // Submit transaction to network
+      const result = await submitTransaction(signedTransaction)
+      
+      // Check the payment status
+      if (result && result.successful) {
+        toast.success("Payment completed successfully!")
+        
+        // Get current user ID from localStorage
+        const walletAddress = typeof window !== 'undefined' ? 
+          localStorage.getItem('stellera_last_used_account') : null
+        
+        // Create a payment sent notification
+        await fetch('/api/notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            recipient: walletAddress || publicKey, // Current user's wallet address
+            type: 'payment_sent',
+            amount,
+            asset,
+            issuerWallet: recipientWallet,
+            issuerName: recipient,
+            description: `You paid ${recipient} ${amount} ${asset} for ${description}`,
+            read: true,
+            txHash: result.hash,
+            status: 'paid'
+          })
+        })
+        
+        // Mark the notification as read and set as paid if we have an ID
+        if (notificationId) {
+          await fetch(`/api/notifications/${notificationId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              status: 'paid',
+              txHash: result.hash
+            })
+          })
+        }
+        
+        setIsComplete(true)
+        
+        // Call the onPaymentComplete callback if provided
+        if (onPaymentComplete) {
+          onPaymentComplete();
+        }
+      } else {
+        throw new Error("Transaction failed to complete")
+      }
+    } catch (error: any) {
       console.error('Payment error:', error)
+      setTransactionError(error.message || "Transaction failed. Please try again.")
+      toast.error(`Payment failed: ${error.message || "Unknown error"}`)
     } finally {
       setIsLoading(false)
     }
@@ -71,6 +149,7 @@ export default function PaymentDialog({
       setTimeout(() => {
         setIsComplete(false)
         setMemo(description)
+        setTransactionError(null)
       }, 300)
     }
   }
@@ -128,6 +207,18 @@ export default function PaymentDialog({
                 onChange={(e) => setMemo(e.target.value)}
               />
             </div>
+            
+            {!isConnected && (
+              <div className="p-3 bg-amber-100 text-amber-800 rounded-md text-sm">
+                Please connect your wallet to make payments.
+              </div>
+            )}
+            
+            {transactionError && (
+              <div className="p-3 bg-red-100 text-red-800 rounded-md text-sm">
+                {transactionError}
+              </div>
+            )}
           </div>
         )}
         
@@ -137,9 +228,17 @@ export default function PaymentDialog({
           ) : (
             <Button 
               onClick={handlePayment} 
-              disabled={isLoading}
+              disabled={isLoading || !isConnected}
+              className="relative"
             >
-              {isLoading ? 'Processing...' : 'Pay Now'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Pay Now'
+              )}
             </Button>
           )}
         </DialogFooter>

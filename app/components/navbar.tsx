@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/app/components/ui/dropdown-menu"
+import NotificationDropdown from "./notification/notification-dropdown"
 
 export function Navbar() {
   const { setTheme, theme } = useTheme()
@@ -85,13 +86,7 @@ export function Navbar() {
             </Button>
             
             {/* Notifications - Visual indicator only for now */}
-            <Button variant="ghost" size="icon" className="rounded-full h-9 w-9 relative">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
-                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
-              </svg>
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"></span>
-            </Button>
+            <NotificationDropdown userId={currentAccount?.publicKey || ""} />
           </div>
         </div>
       </div>

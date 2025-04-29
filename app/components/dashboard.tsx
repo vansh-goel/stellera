@@ -26,6 +26,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select"
 import StellarSdk, { Horizon } from "@stellar/stellar-sdk"
 import { Loader2 } from "lucide-react"
+import { Particles } from "@/app/components/particles"
 
 // Network configuration
 const horizonUrl = "https://horizon-testnet.stellar.org";
@@ -287,6 +288,7 @@ export function Dashboard() {
 
   return (
     <div className="py-8 px-4 md:px-8 max-w-7xl mx-auto">
+      <Particles />
       {/* Hero Section */}
       <section className="py-12 md:py-20">
         <div className="relative overflow-hidden">

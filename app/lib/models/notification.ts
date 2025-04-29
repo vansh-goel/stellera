@@ -11,6 +11,8 @@ export interface NotificationInterface {
   description: string;
   read: boolean;
   createdAt: Date;
+  txHash?: string; // Transaction hash for blockchain payments
+  status?: 'pending' | 'paid' | 'failed'; // Payment status
 }
 
 const NotificationSchema = new Schema<NotificationInterface>({
@@ -23,7 +25,9 @@ const NotificationSchema = new Schema<NotificationInterface>({
   expenseId: { type: String },
   description: { type: String, required: true },
   read: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  txHash: { type: String },
+  status: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' }
 });
 
 export const Notification = mongoose.models.Notification || mongoose.model('Notification', NotificationSchema); 

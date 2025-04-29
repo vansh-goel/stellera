@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { Button } from "@/app/components/ui/button"
+import { Particles } from "@/app/components/particles"
 
 type Asset = {
   id: string
@@ -182,6 +183,7 @@ export default function SwapPage() {
   
   return (
     <div className="container mx-auto space-y-8">
+      <Particles />
       <h1 className="text-3xl font-bold tracking-tight">Swap Tokens</h1>
       
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
