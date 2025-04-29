@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CreateWallet } from "@/app/components/create-wallet"
 import { Dashboard } from "@/app/components/dashboard"
 
 export default function Home() {

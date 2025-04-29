@@ -2,6 +2,10 @@
 
 import React, { useState } from "react"
 import { Button } from "@/app/components/ui/button"
+import { RecipientInput } from "@/app/components/recipient-input"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/app/components/ui/card"
+import { Label } from "@/app/components/ui/label"
+import { Input } from "@/app/components/ui/input"
 
 type RecurringPayment = {
   id: string
@@ -98,6 +102,7 @@ export default function PaymentsPage() {
   const [newPayment, setNewPayment] = useState({
     recipient: "",
     recipientName: "",
+    resolvedRecipient: "",
     amount: "",
     asset: "XLM",
     frequency: "monthly" as RecurringPayment['frequency'],
@@ -133,10 +138,13 @@ export default function PaymentsPage() {
       }
     }
     
+    // Extract the real recipient address if it's a username
+    const recipientAddress = newPayment.resolvedRecipient || newPayment.recipient;
+    
     const newRecurringPayment: RecurringPayment = {
       id: `p${recurringPayments.length + 1}`,
-      recipient: newPayment.recipient,
-      recipientName: newPayment.recipientName || undefined,
+      recipient: recipientAddress, // Use the resolved address
+      recipientName: newPayment.recipientName || (newPayment.recipient.startsWith('@') ? newPayment.recipient : undefined),
       amount: newPayment.amount,
       asset: newPayment.asset,
       frequency: newPayment.frequency,
@@ -153,6 +161,7 @@ export default function PaymentsPage() {
     setNewPayment({
       recipient: "",
       recipientName: "",
+      resolvedRecipient: "",
       amount: "",
       asset: "XLM",
       frequency: "monthly",
@@ -312,14 +321,15 @@ export default function PaymentsPage() {
             <form onSubmit={handleCreatePayment} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Recipient Stellar Address</label>
-                  <input
-                    type="text"
+                  <label className="block text-sm font-medium mb-1">Recipient</label>
+                  <RecipientInput
                     value={newPayment.recipient}
-                    onChange={(e) => setNewPayment({...newPayment, recipient: e.target.value})}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="G..."
-                    required
+                    onChange={(value, resolvedAddress) => setNewPayment({
+                      ...newPayment,
+                      recipient: value,
+                      resolvedRecipient: resolvedAddress || ""
+                    })}
+                    placeholder="Public key or @username"
                   />
                 </div>
                 

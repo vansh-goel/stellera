@@ -1,13 +1,30 @@
 "use client"
 
 import * as React from "react"
+import { useState } from "react"
+import Link from "next/link"
 import { MoonIcon, SunIcon } from "@radix-ui/react-icons"
 import { useTheme } from "next-themes"
 import { Button } from "@/app/components/ui/button"
 import { WalletSwitcher } from "./wallet-switcher"
+import { User, LogOut } from "lucide-react"
+import { useWallet } from "@/app/providers/wallet-provider"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/app/components/ui/dropdown-menu"
 
 export function Navbar() {
   const { setTheme, theme } = useTheme()
+  const { isConnected, publicKey, disconnect, currentAccount } = useWallet()
+
+  const formatPublicKey = (key: string) => {
+    if (!key) return ""
+    return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`
+  }
 
   return (
     <header className="fixed top-0 right-0 left-0 md:left-64 z-40 h-16">
@@ -28,8 +45,31 @@ export function Navbar() {
               <span>Stellar Testnet</span>
             </div>
             
-            {/* Wallet Switcher */}
-            <WalletSwitcher />
+            {/* User Profile & Wallet */}
+            {isConnected && publicKey ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 border-gray-700">
+                    {currentAccount?.name || 'Account'}: {formatPublicKey(publicKey)}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <Link href="/profile" className="cursor-pointer">
+                    <DropdownMenuItem>
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Profile</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={disconnect}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Disconnect</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <WalletSwitcher />
+            )}
             
             {/* Theme Toggle */}
             <Button

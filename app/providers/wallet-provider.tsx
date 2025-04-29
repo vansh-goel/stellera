@@ -2,9 +2,11 @@
 
 import { createContext, useContext, useEffect, useState } from "react"
 import { Wallet, StellarConfiguration, ApplicationConfiguration, DefaultSigner } from '@stellar/typescript-wallet-sdk'
-import { Keypair } from '@stellar/stellar-sdk'
 import axios, { AxiosInstance } from 'axios'
 import { useToast } from "@/app/hooks/use-toast"
+
+// Import Keypair for the importWallet function
+import { Keypair, TransactionBuilder } from '@stellar/stellar-sdk'
 
 interface WalletAccount {
   publicKey: string
@@ -31,6 +33,7 @@ interface WalletContextType {
   importWallet: (secretKey: string, name: string) => Promise<void>
   hasDefaultWallet: boolean
   currentAccount: WalletAccount | null
+  sign: (params: { transactionXDR: string, network: string, pincode: string }) => Promise<string>
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined)
@@ -308,6 +311,35 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Add sign function to sign transactions with the current account
+  const sign = async ({ transactionXDR, network, pincode }: { transactionXDR: string, network: string, pincode: string }) => {
+    if (!wallet || !currentAccount) {
+      throw new Error("Wallet not initialized or no account selected");
+    }
+
+    try {
+      // Verify pincode here if needed
+      // In a real app, the pincode would be used for secure key access
+      
+      // Import the functions we need from stellar-sdk
+      
+      // Use the current account's secret key
+      const keypair = Keypair.fromSecret(currentAccount.secretKey);
+      
+      // Create a transaction object from XDR
+      const transaction = TransactionBuilder.fromXDR(transactionXDR, network);
+      
+      // Sign the transaction
+      transaction.sign(keypair);
+      
+      // Return the signed transaction XDR
+      return transaction.toXDR();
+    } catch (err) {
+      console.error("Failed to sign transaction:", err);
+      throw new Error(err instanceof Error ? err.message : "Failed to sign transaction");
+    }
+  };
+
   const value = {
     wallet,
     isConnected,
@@ -326,7 +358,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     switchAccount,
     importWallet,
     hasDefaultWallet,
-    currentAccount
+    currentAccount,
+    sign
   }
 
   return (
@@ -342,4 +375,4 @@ export function useWallet() {
     throw new Error("useWallet must be used within a WalletProvider")
   }
   return context
-} 
+}
