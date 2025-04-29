@@ -13,6 +13,7 @@ import { useWallet } from "@/app/providers/wallet-provider"
 import { createChangeTrustTransaction, createPaymentTransaction, submitTransaction } from "@/lib/stellar-transactions"
 import { Horizon, Asset } from "@stellar/stellar-sdk"
 import { Particles } from "@/app/components/particles"
+import { RewardTransactions } from "@/app/components/reward-transactions"
 
 // Constants for SLR token
 const SLR_ASSET_CODE = "SLR"
@@ -57,6 +58,8 @@ export default function RewardsPage() {
   const [slrBalance, setSlrBalance] = useState("0")
   const [xlmSpent, setXlmSpent] = useState(0)
   const [showCreateTrustlineDialog, setShowCreateTrustlineDialog] = useState(false)
+  const [slrTransactions, setSlrTransactions] = useState<any[]>([])
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false)
   
   // Reward programs state
   const [rewardPrograms, setRewardPrograms] = useState<RewardProgram[]>([
@@ -171,6 +174,7 @@ export default function RewardsPage() {
   useEffect(() => {
     if (isConnected && publicKey) {
       checkTrustlineAndBalance();
+      fetchSlrTransactions();
     }
   }, [isConnected, publicKey]);
   
@@ -301,6 +305,62 @@ export default function RewardsPage() {
     setSelectedReward(null)
   }
   
+  // Fetch SLR transactions
+  const fetchSlrTransactions = async () => {
+    if (!publicKey) return;
+    
+    try {
+      setIsLoadingTransactions(true);
+      const server = new Horizon.Server("https://horizon-testnet.stellar.org");
+      
+      // Fetch operations related to SLR token
+      const { records } = await server.operations()
+        .forAccount(publicKey)
+        .order("desc")
+        .limit(20)
+        .call();
+      
+      // Filter for operations involving SLR
+      const slrOps = records.filter((op: any) => {
+        return (
+          // For payment operations
+          (op.type === "payment" && 
+           op.asset_code === SLR_ASSET_CODE && 
+           op.asset_issuer === SLR_ISSUER_WALLET) ||
+          // For change_trust operations
+          (op.type === "change_trust" && 
+           op.asset_code === SLR_ASSET_CODE && 
+           op.asset_issuer === SLR_ISSUER_WALLET)
+        );
+      });
+      
+      // Map to our transaction format
+      const formattedTxs = await Promise.all(slrOps.map(async (op: any) => {
+        // Get the parent transaction for the operation
+        const tx = await op.transaction();
+        
+        return {
+          id: `${op.id}`,
+          txHash: tx.id,
+          amount: op.type === "payment" ? parseFloat(op.amount) : 0,
+          date: op.created_at,
+          description: op.type === "payment" 
+            ? `Received ${op.amount} SLR token${parseFloat(op.amount) !== 1 ? 's' : ''}`
+            : op.type === "change_trust" 
+              ? "Created SLR trustline" 
+              : `SLR ${op.type} operation`
+        };
+      }));
+      
+      setSlrTransactions(formattedTxs);
+    } catch (error) {
+      console.error("Error fetching SLR transactions:", error);
+      toast.error("Failed to load SLR activity");
+    } finally {
+      setIsLoadingTransactions(false);
+    }
+  };
+  
   return (
     <div className="container mx-auto space-y-8 px-4 py-8">
       <Particles />
@@ -421,22 +481,40 @@ export default function RewardsPage() {
             </Card>
           </div>
           
-          {/* Recent SLR Activity (placeholder) */}
+          {/* Recent SLR Activity */}
           <Card className="border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xl font-semibold">Recent SLR Activity</CardTitle>
+              <CardTitle className="text-xl font-semibold flex items-center justify-between">
+                <span>Recent SLR Activity</span>
+                {isConnected && hasTrustline && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={fetchSlrTransactions}
+                    disabled={isLoadingTransactions}
+                  >
+                    {isLoadingTransactions ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  </Button>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {/* This would be populated with actual SLR transactions in a real implementation */}
+              {isConnected ? (
+                hasTrustline ? (
+                  <RewardTransactions 
+                    transactions={slrTransactions} 
+                    isLoading={isLoadingTransactions} 
+                  />
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">
+                    Create a trustline to start earning SLR
+                  </div>
+                )
+              ) : (
                 <div className="text-center text-muted-foreground py-8">
-                  {isConnected ? (
-                    hasTrustline ? "No SLR activity yet" : "Create a trustline to start earning SLR"
-                  ) : (
-                    "Connect your wallet to view SLR activity"
-                  )}
+                  Connect your wallet to view SLR activity
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

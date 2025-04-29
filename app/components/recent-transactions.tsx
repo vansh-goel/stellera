@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react"
 import { useWallet } from "@/app/providers/wallet-provider"
 import { formatDistanceToNow } from "date-fns"
 import { Horizon } from "@stellar/stellar-sdk"
-import { CheckCircle2, XCircle, Clock, ArrowUpRight, ArrowDownLeft } from "lucide-react"
+import { CheckCircle2, XCircle, Clock, ArrowUpRight, ArrowDownLeft, ExternalLink } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 
 interface Transaction {
@@ -23,6 +23,14 @@ interface Transaction {
     to?: string
   }[]
 }
+
+// Helper function to get Stellar Explorer URL
+const getExplorerUrl = (txHash: string): string => {
+  // Determine if we're using testnet or public network
+  // For simplicity, we'll default to testnet in this example
+  const network = process.env.NEXT_PUBLIC_STELLAR_NETWORK === 'PUBLIC' ? 'public' : 'testnet';
+  return `https://stellar.expert/explorer/${network}/tx/${txHash}`;
+};
 
 interface RecentTransactionsProps {
   refreshTrigger: number;
@@ -65,7 +73,7 @@ export function RecentTransactions({ refreshTrigger }: RecentTransactionsProps) 
             status: tx.successful ? "SUCCESS" : "FAILED",
             ledger: tx.ledger_attr,
             createdAt: new Date(tx.created_at).getTime(),
-            fee: tx.fee_charged.toString(),
+            fee: (Number(tx.fee_charged) / 10000000).toString(),
             memo: tx.memo,
             operations: operations.records.map(op => {
               const baseOp = {
@@ -240,8 +248,24 @@ export function RecentTransactions({ refreshTrigger }: RecentTransactionsProps) 
                     </div>
                   )}
 
+                  {/* Explorer Link */}
+
                   <div className="space-y-2">
+                    <div className="flex justify-between items-center">
                     <p className="text-sm font-medium text-gray-300">Operations</p>
+                                    <div className="mt-3 flex justify-end">
+                    <a
+                      href={getExplorerUrl(tx.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-primary hover:underline px-2 py-1 rounded-md bg-primary/10"
+                      title="View on Stellar Explorer"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Explorer
+                    </a>
+                    </div>
+                  </div>
                     {tx.operations.map((op, index) => (
                       <div 
                         key={index} 

@@ -44,6 +44,7 @@ export function Dashboard() {
   const { wallet, isConnected, publicKey, fundTestnetAccount, getBalance, isTestnet, currentAccount, sign } = useWallet()
   const [balance, setBalance] = useState<string>("0")
   const [isLoading, setIsLoading] = useState(true)
+  const [userName, setUserName] = useState<string>("")
   
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false)
@@ -102,6 +103,29 @@ export function Dashboard() {
     }, 10000); // Poll every 10 seconds
 
     return () => clearInterval(intervalId); // Clear interval on component unmount or publicKey change
+  }, [publicKey]);
+
+  // Fetch user name from database
+  useEffect(() => {
+    const fetchUserName = async () => {
+      if (!publicKey) return;
+      
+      try {
+        const response = await fetch(`/api/user?publicKey=${publicKey}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.name) {
+            setUserName(data.username);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch user name:", error);
+        // Don't show error toast as this is not critical
+      }
+    };
+    
+    fetchUserName();
   }, [publicKey]);
 
   const handleFundAccount = async () => {
@@ -327,6 +351,13 @@ export function Dashboard() {
               Welcome to <span className="font-bold italic">Stellera</span> 
             </h1>
             
+            {publicKey && (
+              <p className="text-xl mb-4">
+                Hi, <span className="font-semibold">{userName || 'there'}</span>! 
+                <span className="text-gray-400 text-sm ml-2">({publicKey.substring(0, 4)}...{publicKey.substring(publicKey.length - 4)})</span>
+              </p>
+            )}
+            
             <div className="flex items-center gap-4 mb-10">
               <WalletSwitcher />
               {isTestnet && (
@@ -335,33 +366,12 @@ export function Dashboard() {
                 </Button>
               )}
             </div>
-            
-            <div className="flex flex-wrap gap-5">
-              <Button 
-                variant="cosmic" 
-                size="lg" 
-                className="rounded-xl"
-                onClick={() => setShowPaymentModal(true)}
-                disabled={!isConnected}
-              >
-                Send Payment
-              </Button>
-              <Button 
-                variant="outline" 
-                size="lg" 
-                className="rounded-xl"
-                onClick={() => setShowTrustlineModal(true)}
-                disabled={!isConnected}
-              >
-                Manage Assets
-              </Button>
-            </div>
           </div>
         </div>
       </section>
       
       {/* Balance Overview */}
-      <section className="py-8">
+      <section className="">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-semibold">Your Balance</h2>
           <div className="text-3xl font-bold">
