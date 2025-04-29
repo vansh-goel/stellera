@@ -41,6 +41,7 @@
     "postcss": "^8.5.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-qr-code": "^2.0.15",
     "shadcn-ui": "^0.9.5",
     "sonner": "^2.0.3",
     "stellar-sdk": "^13.3.0",
