@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({ users });
   } catch (error) {
-    console.error('Error searching users:', error);
+    console.log('Error searching users:', error);
     return NextResponse.json({ error: 'Failed to search users' }, { status: 500 });
   }
 } 

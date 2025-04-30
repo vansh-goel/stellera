@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       
       if (!submitResponse.ok) {
         const errorData = await submitResponse.json();
-        console.error("Transaction submission error from Horizon:", errorData);
+        console.log("Transaction submission error from Horizon:", errorData);
         throw new Error(errorData.title || "Error submitting transaction");
       }
       
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
         envelope_xdr: transactionResult.envelope_xdr
       });
     } catch (submitError: any) {
-      console.error("Transaction submission error:", submitError);
+      console.log("Transaction submission error:", submitError);
       
       // Format error response
       const errorResponse = {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse, { status: 400 });
     }
   } catch (error: any) {
-    console.error('Error in transaction submission handler:', error)
+    console.log('Error in transaction submission handler:', error)
     
     return NextResponse.json({ 
       error: "Transaction submission failed",

@@ -175,7 +175,7 @@ export async function submitTransaction(signedTransactionXDR: string) {
     const transaction = TransactionBuilder.fromXDR(signedTransactionXDR, networkPassphrase);
     return await server.submitTransaction(transaction);
   } catch (error) {
-    console.error("Error submitting transaction:", error);
+    console.log("Error submitting transaction:", error);
     throw error;
   }
 }

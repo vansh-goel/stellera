@@ -82,7 +82,7 @@ export function Dashboard() {
         const newBalance = await getBalance()
         setBalance(newBalance)
       } catch (error) {
-        console.error("Failed to fetch balance:", error)
+        console.log("Failed to fetch balance:", error)
         toast.error("Failed to fetch account balance")
       } finally {
         setIsLoading(false)
@@ -120,7 +120,7 @@ export function Dashboard() {
           }
         }
       } catch (error) {
-        console.error("Failed to fetch user name:", error);
+        console.log("Failed to fetch user name:", error);
         // Don't show error toast as this is not critical
       }
     };
@@ -137,7 +137,7 @@ export function Dashboard() {
       setBalance(newBalance)
       setRefreshTrigger(prev => prev + 1); // Trigger transaction refresh
     } catch (error) {
-      console.error("Failed to fund account:", error)
+      console.log("Failed to fund account:", error)
       toast.error("Failed to fund account")
     }
   }
@@ -206,7 +206,7 @@ export function Dashboard() {
               })
             });
           } catch (error) {
-            console.error("Error tracking rewards:", error);
+            console.log("Error tracking rewards:", error);
             // Don't fail the payment if rewards tracking fails
           }
         }
@@ -223,7 +223,7 @@ export function Dashboard() {
         throw new Error("Transaction failed");
       }
     } catch (error: any) {
-      console.error("Payment error:", error);
+      console.log("Payment error:", error);
       toast.error(error.message || "Failed to send payment");
     } finally {
       setIsSendingPayment(false);
@@ -251,7 +251,7 @@ export function Dashboard() {
       setShowTrustlineModal(false)
       resetTrustlineForm()
     } catch (error: any) {
-      console.error("Failed to create trustline transaction:", error)
+      console.log("Failed to create trustline transaction:", error)
       toast.error(`Failed to create trustline transaction: ${error.message || "Unknown error"}`)
     }
   }
@@ -276,7 +276,7 @@ export function Dashboard() {
       // Directly process the transaction
       await processTransaction(transaction, network_passphrase)
     } catch (error: any) {
-      console.error("Failed to remove trustline:", error)
+      console.log("Failed to remove trustline:", error)
       toast.error(`Failed to remove trustline: ${error.message || "Unknown error"}`)
     }
   }
@@ -308,7 +308,7 @@ export function Dashboard() {
       setBalance(newBalance)
       setRefreshTrigger(prev => prev + 1); // Trigger transaction refresh
     } catch (error: any) {
-      console.error("Transaction failed:", error)
+      console.log("Transaction failed:", error)
       toast.error(`Transaction failed: ${error.message || "Unknown error"}`)
     } finally {
       setIsProcessingTx(false)

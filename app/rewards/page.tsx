@@ -213,7 +213,7 @@ export default function RewardsPage() {
         setSlrBalance(slrTrustline.balance);
       }
     } catch (error) {
-      console.error("Error checking trustline:", error);
+      console.log("Error checking trustline:", error);
       toast.error("Failed to check SLR trustline");
     } finally {
       setIsLoading(false);
@@ -255,7 +255,7 @@ export default function RewardsPage() {
         throw new Error("Transaction failed");
       }
     } catch (error) {
-      console.error("Error creating trustline:", error);
+      console.log("Error creating trustline:", error);
       toast.error("Failed to create SLR trustline");
     } finally {
       setIsLoading(false);
@@ -354,7 +354,7 @@ export default function RewardsPage() {
       
       setSlrTransactions(formattedTxs);
     } catch (error) {
-      console.error("Error fetching SLR transactions:", error);
+      console.log("Error fetching SLR transactions:", error);
       toast.error("Failed to load SLR activity");
     } finally {
       setIsLoadingTransactions(false);

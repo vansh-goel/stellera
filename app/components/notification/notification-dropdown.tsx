@@ -48,7 +48,7 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
         setUnreadCount(data.notifications.filter((notif: NotificationWithId) => !notif.read).length)
       }
     } catch (error) {
-      console.error('Error fetching notifications:', error)
+      console.log('Error fetching notifications:', error)
     } finally {
       setIsLoading(false)
     }
@@ -74,7 +74,7 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
       )
       setUnreadCount(prev => Math.max(0, prev - ids.length))
     } catch (error) {
-      console.error('Error marking notifications as read:', error)
+      console.log('Error marking notifications as read:', error)
     }
   }
 

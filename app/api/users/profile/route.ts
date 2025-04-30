@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       email: user.email
     });
   } catch (error) {
-    console.error('Error updating user profile:', error);
+    console.log('Error updating user profile:', error);
     return NextResponse.json({ error: 'Failed to update user profile' }, { status: 500 });
   }
 } 

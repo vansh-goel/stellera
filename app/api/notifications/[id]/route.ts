@@ -28,7 +28,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       notification 
     });
   } catch (error) {
-    console.error('Error updating notification:', error);
+    console.log('Error updating notification:', error);
     return NextResponse.json({ error: 'Failed to update notification' }, { status: 500 });
   }
 } 

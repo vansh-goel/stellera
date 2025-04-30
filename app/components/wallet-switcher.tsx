@@ -10,10 +10,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/app/components/ui/dropdown-menu"
-import { ChevronDown, Wallet, Plus, LogOut } from "lucide-react"
+import { ChevronDown, Wallet, Plus, LogOut, FileKey } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/app/components/ui/dialog"
 import { Input } from "@/app/components/ui/input"
 import { Label } from "@/app/components/ui/label"
+import { toast } from "sonner"
 
 interface WalletAccount {
   publicKey: string
@@ -22,11 +23,12 @@ interface WalletAccount {
 }
 
 export function WalletSwitcher() {
-  const { currentAccount, accounts, connect, disconnect, importWallet, isConnected } = useWallet()
+  const { currentAccount, accounts, connect, disconnect, importWallet, isConnected, createAccount } = useWallet()
   const [isOpen, setIsOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [secretKey, setSecretKey] = useState("")
   const [accountName, setAccountName] = useState("")
+  const [isCreatingWallet, setIsCreatingWallet] = useState(false)
 
   const handleSwitchAccount = async (account: WalletAccount) => {
     await connect(account)
@@ -39,6 +41,19 @@ export function WalletSwitcher() {
       setSecretKey("")
       setAccountName("")
       setIsImportOpen(false)
+    }
+  }
+  
+  const handleCreateNewWallet = async () => {
+    try {
+      setIsCreatingWallet(true)
+      await createAccount()
+      toast.success("New wallet created successfully!")
+      setIsOpen(false)
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create new wallet")
+    } finally {
+      setIsCreatingWallet(false)
     }
   }
 
@@ -72,6 +87,16 @@ export function WalletSwitcher() {
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
+          <DropdownMenuItem 
+            onSelect={(e) => {
+              e.preventDefault()
+              handleCreateNewWallet()
+            }}
+            disabled={isCreatingWallet}
+          >
+            <FileKey className="mr-2 h-4 w-4" />
+            {isCreatingWallet ? "Creating..." : "Create New Wallet"}
+          </DropdownMenuItem>
           <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
             <DialogTrigger asChild>
               <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
@@ -120,4 +145,4 @@ export function WalletSwitcher() {
       </DropdownMenu>
     </>
   )
-} 
+}

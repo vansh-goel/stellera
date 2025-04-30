@@ -67,7 +67,7 @@ export function useRewards(options: UseRewardsOptions = {}) {
       
       return { hasTrustline: trustlineExists, balance }
     } catch (err) {
-      console.error("Error checking trustline:", err)
+      console.log("Error checking trustline:", err)
       const errorMessage = err instanceof Error ? err.message : "Failed to check SLR trustline"
       setError(errorMessage)
       options.onError?.(errorMessage)
@@ -110,7 +110,7 @@ export function useRewards(options: UseRewardsOptions = {}) {
       
       return true
     } catch (err) {
-      console.error("Error tracking spending:", err)
+      console.log("Error tracking spending:", err)
       const errorMessage = err instanceof Error ? err.message : "Failed to track spending"
       setError(errorMessage)
       options.onError?.(errorMessage)
@@ -163,7 +163,7 @@ export function useRewards(options: UseRewardsOptions = {}) {
       
       return { earnedSLR, issuedSLR: slrToIssue }
     } catch (err) {
-      console.error("Error checking earned rewards:", err)
+      console.log("Error checking earned rewards:", err)
       const errorMessage = err instanceof Error ? err.message : "Failed to check earned rewards"
       setError(errorMessage)
       options.onError?.(errorMessage)

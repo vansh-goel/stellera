@@ -335,7 +335,7 @@ export default function NFTTicketsPage() {
               issuer: assetIssuer || publicKey
             }
           } catch (err) {
-            console.error("Error processing asset creation op:", err)
+            console.log("Error processing asset creation op:", err)
             return null
           }
         })
@@ -475,7 +475,7 @@ export default function NFTTicketsPage() {
             })
           }
         } catch (err) {
-          console.error("Error processing ticket asset:", asset, err)
+          console.log("Error processing ticket asset:", asset, err)
           // Add with basic info on error
           tickets.push({
             id: `${asset.asset_code}:${asset.asset_issuer}`,
@@ -521,14 +521,14 @@ export default function NFTTicketsPage() {
           console.log(`Found ${ticketsSold} distributed tickets for event ${event.name}`)
         }
       } catch (err) {
-        console.error("Error counting distributed tickets:", err)
+        console.log("Error counting distributed tickets:", err)
       }
       
       setMyEvents(events)
       setReceivedTickets(tickets)
       
     } catch (error) {
-      console.error('Error fetching events and tickets:', error)
+      console.log('Error fetching events and tickets:', error)
       toast({
         title: "Error",
         description: "Failed to load your events and tickets",
@@ -684,7 +684,7 @@ export default function NFTTicketsPage() {
       fetchMyEventsAndTickets()
       
     } catch (error) {
-      console.error('Transfer error:', error)
+      console.log('Transfer error:', error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to transfer ticket",
@@ -777,7 +777,7 @@ export default function NFTTicketsPage() {
         console.log("Transaction signed successfully")
         console.log("Signed XDR:", signedXDR)
       } catch (signError) {
-        console.error("Error signing transaction:", signError)
+        console.log("Error signing transaction:", signError)
         throw new Error("Failed to sign transaction. Please try again.")
       }
       
@@ -798,7 +798,7 @@ export default function NFTTicketsPage() {
         console.log("Transaction submission response:", submitData)
         
         if (!submitResponse.ok) {
-          console.error("Transaction submission failed:", submitData)
+          console.log("Transaction submission failed:", submitData)
           throw new Error(submitData.error || submitData.details || 'Failed to submit transaction')
         }
         
@@ -857,7 +857,7 @@ export default function NFTTicketsPage() {
           fetchMyEventsAndTickets()
         }, 2000)
       } catch (submitError: any) {
-        console.error("Transaction submission error:", submitError)
+        console.log("Transaction submission error:", submitError)
         
         // For testing, we can still show success if we have the asset code
         if (data.assetCode) {
@@ -912,7 +912,7 @@ export default function NFTTicketsPage() {
         }
       }
     } catch (error) {
-      console.error('Event creation error:', error)
+      console.log('Event creation error:', error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create event",
@@ -1043,7 +1043,7 @@ export default function NFTTicketsPage() {
       }, 2000)
       
     } catch (error) {
-      console.error('Ticket sending error:', error)
+      console.log('Ticket sending error:', error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to send ticket",
@@ -1134,7 +1134,7 @@ export default function NFTTicketsPage() {
       }, 2000)
       
     } catch (error) {
-      console.error('Trustline creation error:', error)
+      console.log('Trustline creation error:', error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create trustline",
@@ -1164,7 +1164,7 @@ export default function NFTTicketsPage() {
         day: 'numeric'
       });
     } catch (error) {
-      console.error("Error formatting date:", error);
+      console.log("Error formatting date:", error);
       return "Invalid date";
     }
   }

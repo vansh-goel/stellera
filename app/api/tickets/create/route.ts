@@ -166,11 +166,11 @@ export async function POST(request: NextRequest) {
         ticketPrice
       })
     } catch (error: any) {
-      console.error('Error creating NFT ticket:', error)
+      console.log('Error creating NFT ticket:', error)
       let errorMessage = 'Failed to create NFT ticket'
       
       if (error.response) {
-        console.error('Response error data:', error.response.data)
+        console.log('Response error data:', error.response.data)
         
         if (error.response.data.extras && error.response.data.extras.result_codes) {
           errorMessage = `Transaction error: ${JSON.stringify(error.response.data.extras.result_codes)}`
@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
   } catch (error: any) {
-    console.error('Error in ticket creation handler:', error)
+    console.log('Error in ticket creation handler:', error)
     return NextResponse.json({ 
       error: 'Failed to process request',
       details: error.message

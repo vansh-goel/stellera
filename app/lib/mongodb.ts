@@ -22,7 +22,7 @@ async function connectToDatabase() {
     console.log('Connected to MongoDB');
     return mongoose;
   } catch (error) {
-    console.error('MongoDB connection error:', error);
+    console.log('MongoDB connection error:', error);
     throw error;
   }
 }

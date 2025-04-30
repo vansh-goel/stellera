@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       results: usernames 
     }, { status: 200 });
   } catch (error) {
-    console.error('Error in username search:', error);
+    console.log('Error in username search:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 } 

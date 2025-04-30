@@ -18,7 +18,7 @@ export function WalletButton() {
         // For example: stellar.accounts().accountId("your-account-id")
       }
     } catch (error) {
-      console.error("Failed to connect wallet:", error)
+      console.log("Failed to connect wallet:", error)
       toast.error("Failed to connect wallet")
     }
   }

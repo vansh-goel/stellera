@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       needsTrustline
     })
   } catch (error: any) {
-    console.error('Error sending NFT ticket:', error)
+    console.log('Error sending NFT ticket:', error)
     return NextResponse.json({ 
       error: 'Failed to send NFT ticket',
       details: error.message

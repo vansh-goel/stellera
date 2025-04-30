@@ -78,7 +78,7 @@ export default function PaymentDialog({
       // Return the SLR tokens issued (if any)
       return data.slrIssued > 0 ? data.slrIssued : null;
     } catch (error) {
-      console.error('Error tracking rewards:', error);
+      console.log('Error tracking rewards:', error);
       return null;
     }
   };
@@ -184,7 +184,7 @@ export default function PaymentDialog({
         throw new Error("Transaction failed to complete")
       }
     } catch (error: any) {
-      console.error('Payment error:', error)
+      console.log('Payment error:', error)
       setTransactionError(error.message || "Transaction failed. Please try again.")
       toast.error(`Payment failed: ${error.message || "Unknown error"}`)
     } finally {

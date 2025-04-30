@@ -24,7 +24,7 @@ export function useUsername(options: UseUsernameOptions = {}) {
       const data = await res.json()
       return data.available
     } catch (err) {
-      console.error('Error checking username:', err)
+      console.log('Error checking username:', err)
       return false
     } finally {
       setIsLoading(false)
@@ -41,7 +41,7 @@ export function useUsername(options: UseUsernameOptions = {}) {
       const data = await res.json()
       return data.exists ? data.username : null
     } catch (err) {
-      console.error('Error getting username for public key:', err)
+      console.log('Error getting username for public key:', err)
       return null
     } finally {
       setIsLoading(false)
@@ -63,7 +63,7 @@ export function useUsername(options: UseUsernameOptions = {}) {
       const data = await res.json()
       return data.available ? null : data.publicKey
     } catch (err) {
-      console.error('Error getting public key for username:', err)
+      console.log('Error getting public key for username:', err)
       return null
     } finally {
       setIsLoading(false)
@@ -114,7 +114,7 @@ export function useUsername(options: UseUsernameOptions = {}) {
       options.onSuccess?.(data.username)
       return data.username
     } catch (err) {
-      console.error('Error registering username:', err)
+      console.log('Error registering username:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to register username'
       setError(errorMessage)
       
@@ -175,7 +175,7 @@ export function useUsername(options: UseUsernameOptions = {}) {
       options.onSuccess?.(data.username)
       return data.username
     } catch (err) {
-      console.error('Error updating username:', err)
+      console.log('Error updating username:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to update username'
       setError(errorMessage)
       
@@ -206,7 +206,7 @@ export function useUsername(options: UseUsernameOptions = {}) {
       setUsername(fetchedUsername)
       return fetchedUsername
     } catch (err) {
-      console.error('Error loading username:', err)
+      console.log('Error loading username:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to load username'
       setError(errorMessage)
       return null
@@ -245,7 +245,7 @@ export function useUsername(options: UseUsernameOptions = {}) {
       
       return true
     } catch (err) {
-      console.error('Error deleting username:', err)
+      console.log('Error deleting username:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete username'
       setError(errorMessage)
       
@@ -276,7 +276,7 @@ export function useUsername(options: UseUsernameOptions = {}) {
       
       return data.results || []
     } catch (err) {
-      console.error('Error searching usernames:', err)
+      console.log('Error searching usernames:', err)
       return []
     }
   }, [])

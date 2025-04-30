@@ -36,7 +36,7 @@ export function DisplayNameManager() {
         setDisplayName(data.user.displayName)
       }
     } catch (error) {
-      console.error('Error loading display name:', error)
+      console.log('Error loading display name:', error)
       setError('Failed to load display name')
     } finally {
       setIsLoading(false)
@@ -76,7 +76,7 @@ export function DisplayNameManager() {
       })
       
     } catch (err) {
-      console.error('Error saving display name:', err)
+      console.log('Error saving display name:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to update display name'
       setError(errorMessage)
       

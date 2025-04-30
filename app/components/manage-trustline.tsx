@@ -44,7 +44,7 @@ export function ManageTrustline({ assetCode, assetIssuer, onSuccess }: ManageTru
       setPendingTransaction(transaction);
       setIsSignModalOpen(true);
     } catch (error) {
-      console.error("Error creating trustline transaction:", error);
+      console.log("Error creating trustline transaction:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create trustline transaction",
@@ -76,7 +76,7 @@ export function ManageTrustline({ assetCode, assetIssuer, onSuccess }: ManageTru
       setPendingTransaction(transaction);
       setIsSignModalOpen(true);
     } catch (error) {
-      console.error("Error creating trustline transaction:", error);
+      console.log("Error creating trustline transaction:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create trustline transaction",
@@ -110,7 +110,7 @@ export function ManageTrustline({ assetCode, assetIssuer, onSuccess }: ManageTru
         onSuccess();
       }
     } catch (error) {
-      console.error("Error signing transaction:", error);
+      console.log("Error signing transaction:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to sign transaction",

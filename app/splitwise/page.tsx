@@ -94,7 +94,7 @@ export default function SplitwisePage() {
           }
         }
       } catch (error) {
-        console.error("Error fetching current user:", error)
+        console.log("Error fetching current user:", error)
         // Set fallback user
         setCurrentUser({
           _id: "guest-user",
@@ -133,7 +133,7 @@ export default function SplitwisePage() {
         console.log("API response:", data)
       }
     } catch (error) {
-      console.error('Error fetching dues notifications:', error)
+      console.log('Error fetching dues notifications:', error)
     } finally {
       setIsLoading(false)
     }
@@ -197,7 +197,7 @@ export default function SplitwisePage() {
       // Show success message with toast instead of alert
       toast.success("Split bill created successfully!")
     } catch (error) {
-      console.error("Error creating split bill:", error)
+      console.log("Error creating split bill:", error)
       toast.error("Failed to create split bill. Please try again.")
     } finally {
       setIsLoading(false)

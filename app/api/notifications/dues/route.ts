@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       paid: paidNotifications
     });
   } catch (error) {
-    console.error('Error retrieving dues notifications:', error);
+    console.log('Error retrieving dues notifications:', error);
     return NextResponse.json({ error: 'Failed to retrieve dues notifications' }, { status: 500 });
   }
 } 

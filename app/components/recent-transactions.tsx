@@ -124,7 +124,7 @@ export function RecentTransactions({ refreshTrigger }: RecentTransactionsProps) 
           prevTransactionsRef.current = newTransactions
         }
       } catch (err) {
-        console.error("Failed to fetch transactions:", err)
+        console.log("Failed to fetch transactions:", err)
         setError(err instanceof Error ? err.message : "Failed to fetch transactions")
       } finally {
         setIsInitialLoading(false)

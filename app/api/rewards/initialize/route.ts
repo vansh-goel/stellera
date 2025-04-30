@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
           console.log('Successfully funded destination account with friendbot')
         }
       } catch (error) {
-        console.error('Error funding accounts with friendbot:', error)
+        console.log('Error funding accounts with friendbot:', error)
       }
     }
     
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       stellarExplorerLink: `https://stellar.expert/explorer/${STELLAR_NETWORK === Networks.PUBLIC ? 'public' : 'testnet'}/tx/${result.hash}`
     })
   } catch (error: any) {
-    console.error('Error initializing SLR token:', error)
+    console.log('Error initializing SLR token:', error)
     return NextResponse.json({
       success: false,
       error: error.message || 'Failed to initialize SLR token',

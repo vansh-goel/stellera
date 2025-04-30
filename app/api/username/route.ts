@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ error: 'Missing username or publicKey parameter' }, { status: 400 });
   } catch (error) {
-    console.error('Error in username GET:', error);
+    console.log('Error in username GET:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       username: newUsername.username 
     }, { status: 201 });
   } catch (error) {
-    console.error('Error in username POST:', error);
+    console.log('Error in username POST:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
@@ -139,7 +139,7 @@ export async function PUT(request: NextRequest) {
       username: existingUser.username 
     }, { status: 200 });
   } catch (error) {
-    console.error('Error in username PUT:', error);
+    console.log('Error in username PUT:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
@@ -167,7 +167,7 @@ export async function DELETE(request: NextRequest) {
       message: 'Username successfully removed' 
     }, { status: 200 });
   } catch (error) {
-    console.error('Error in username DELETE:', error);
+    console.log('Error in username DELETE:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 } 

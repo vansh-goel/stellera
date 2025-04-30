@@ -189,7 +189,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       addAccount(newAccount)
       await connect(newAccount)
     } catch (err) {
-      console.error("Failed to create account:", err)
+      console.log("Failed to create account:", err)
       setError(err instanceof Error ? err.message : "Failed to create account")
     } finally {
       setIsLoading(false)
@@ -335,7 +335,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       // Return the signed transaction XDR
       return transaction.toXDR();
     } catch (err) {
-      console.error("Failed to sign transaction:", err);
+      console.log("Failed to sign transaction:", err);
       throw new Error(err instanceof Error ? err.message : "Failed to sign transaction");
     }
   };

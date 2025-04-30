@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       publicKey: publicKey
     })
   } catch (error) {
-    console.error('Error retrieving user:', error)
+    console.log('Error retrieving user:', error)
     return NextResponse.json({ error: 'Failed to retrieve user information' }, { status: 500 })
   }
 } 

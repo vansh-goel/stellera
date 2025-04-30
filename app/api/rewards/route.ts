@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       earnedSLR: Math.floor(rewardRecord.totalXlmSpent / 100) // 1 SLR per 100 XLM
     })
   } catch (error) {
-    console.error('Error getting rewards:', error)
+    console.log('Error getting rewards:', error)
     return NextResponse.json({ error: 'Failed to get rewards' }, { status: 500 })
   }
 }
@@ -115,11 +115,11 @@ async function issueSLRTokens(destination: string, amount: number): Promise<stri
       
       return result.hash
     } catch (error) {
-      console.error('Error issuing SLR tokens:', error)
+      console.log('Error issuing SLR tokens:', error)
       throw new Error(`Failed to issue tokens: ${error}`)
     }
   } catch (error) {
-    console.error('Error in SLR token issuance process:', error)
+    console.log('Error in SLR token issuance process:', error)
     throw error
   }
 }
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
         const lastTx = record.transactions[record.transactions.length - 1]
         lastTx.txHash = issueTxHash
       } catch (error) {
-        console.error('Failed to issue SLR tokens:', error)
+        console.log('Failed to issue SLR tokens:', error)
         // In a production app, you might want to queue this for retry
       }
     }
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
       issueTxHash
     })
   } catch (error) {
-    console.error('Error tracking rewards:', error)
+    console.log('Error tracking rewards:', error)
     return NextResponse.json({ error: 'Failed to process rewards' }, { status: 500 })
   }
 } 

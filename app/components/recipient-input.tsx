@@ -120,7 +120,7 @@ export function RecipientInput({
           onChange(`@${username}`, publicKey)
         }
       } catch (error) {
-        console.error('Error resolving username:', error)
+        console.log('Error resolving username:', error)
         setResolvedAddress(null)
       } finally {
         setIsLoading(false)

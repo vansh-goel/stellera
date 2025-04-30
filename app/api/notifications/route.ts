@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({ notifications });
   } catch (error) {
-    console.error('Error retrieving notifications:', error);
+    console.log('Error retrieving notifications:', error);
     return NextResponse.json({ error: 'Failed to retrieve notifications' }, { status: 500 });
   }
 }
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({ notification }, { status: 201 });
   } catch (error) {
-    console.error('Error creating notification:', error);
+    console.log('Error creating notification:', error);
     return NextResponse.json({ error: 'Failed to create notification' }, { status: 500 });
   }
 }
@@ -59,7 +59,7 @@ export async function PATCH(request: NextRequest) {
     
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error updating notifications:', error);
+    console.log('Error updating notifications:', error);
     return NextResponse.json({ error: 'Failed to update notifications' }, { status: 500 });
   }
 } 

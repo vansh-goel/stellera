@@ -2,64 +2,37 @@
 
 import React, { useState, useEffect } from "react"
 import { Button } from "@/app/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/app/components/ui/card"
+import { Label } from "@/app/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select"
 import { Particles } from "@/app/components/particles"
+import { Loader2, ArrowDownUp } from "lucide-react"
+import { toast } from "sonner"
+import { RecipientInput } from "@/app/components/recipient-input"
+import { useWallet } from "@/app/providers/wallet-provider"
+import { useUsername } from "@/app/hooks/use-username"
+import { Horizon } from "@stellar/stellar-sdk"
+import { createPaymentTransaction, submitTransaction } from "@/lib/stellar-transactions"
+import * as Client from "@/packages/hello_world"
 
-// Mock contract interface until proper imports can be resolved
-const networks = {
-  testnet: {
-    networkPassphrase: "Test SDF Network ; September 2015",
-    contractId: "CCYJ2GTKSRIIMURP4KOOQ7IXSPBYUXDIMWCMPQ4CQQZGEP33AWBV6FON",
-  }
-};
+// USDC contract address on Stellar
+const USDC_CONTRACT_ADDRESS = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
 
-// Mock Client class
-class Client {
-  constructor(options: any) {
-    console.log('Initialized contract client with options:', options);
-  }
+// XLM contract address on Stellar (needed for smart contract swap)
+const XLM_CONTRACT_ADDRESS = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 
-  async swap(params: any) {
-    console.log('Called swap with params:', params);
-    return {
-      toXDR: () => 'MockTransactionXDR'
-    };
-  }
-}
+// Network configuration
+const horizonUrl = "https://horizon-testnet.stellar.org"
+const sorobanRpcUrl = "https://soroban-testnet.stellar.org:443"
 
-// Mock SorobanRpc server
-const SorobanRpc = {
-  Server: class Server {
-    constructor(url: string) {
-      console.log('Initialized Soroban RPC server with URL:', url);
-    }
-
-    async getAccount(accountId: string) {
-      return { sequence: '123456' };
-    }
-
-    async sendTransaction(xdr: string) {
-      console.log('Sending transaction:', xdr);
-      return {
-        status: 'PENDING',
-        hash: 'mock_tx_' + Math.random().toString(36).substring(2, 15)
-      };
-    }
-  }
-};
-
-// Asset types for display and selection
-type Asset = {
+// Types
+interface Asset {
   id: string
-  symbol: string
   name: string
+  symbol: string
   balance: string
-  icon: string
+  icon?: string
   address?: string // Soroban token contract address
-}
-
-type PriceData = {
-  rate: number
-  change24h: number
 }
 
 type SwapHistory = {
@@ -69,310 +42,396 @@ type SwapHistory = {
   fromAmount: string
   toAmount: string
   date: string
+  recipient: string
+  recipientUsername?: string
   status: 'completed' | 'pending' | 'failed'
   txId?: string
 }
 
 export default function SwapPage() {
+  const { wallet, isConnected, publicKey, getBalance, sign, currentAccount } = useWallet()
+  const { username, loadUsername } = useUsername()
+  
+  // Client instance for smart contract
+  const [contractClient, setContractClient] = useState<Client.Client | null>(null)
+  
   // State for wallet connection
-  const [isWalletConnected, setIsWalletConnected] = useState(false)
-  const [userPublicKey, setUserPublicKey] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
   const [statusMessage, setStatusMessage] = useState('')
-
-  // Real token assets would include their contract addresses on Soroban
-  const [assets, setAssets] = useState<Asset[]>([
-    {
-      id: "xlm",
-      symbol: "XLM",
-      name: "Stellar Lumens",
-      balance: "120.5",
-      icon: "https://via.placeholder.com/32",
-      address: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC" 
-    },
-    {
-      id: "usdc",
-      symbol: "USDC",
-      name: "USD Coin",
-      balance: "250.75",
-      icon: "https://via.placeholder.com/32",
-      address: "CB5DW7GVQJZQIO4QBJADHXSVLZQ6WNPOWPRN4XB5HJDGPA6YVBXKCBLT" // Example address
-    },
-    {
-      id: "cool",
-      symbol: "COOL",
-      name: "COOL",
-      balance: "0.05",
-      icon: "https://via.placeholder.com/32",
-      address: "GB6MGKEZA3CL75MK4JIEAUZGH3BAWHGZLWEZ3P5HZSOYHTUPOG4WPS5I" // Example address
-    },
-  ])
   
-  // Mock price data for UI display, would be fetched from an API in production
-  const [priceData, setPriceData] = useState<{[key: string]: PriceData}>({
-    "xlm-usdc": { rate: 0.12, change24h: 2.5 },
-    "xlm-eth": { rate: 0.000045, change24h: -1.2 },
-    "xlm-btc": { rate: 0.0000024, change24h: 0.8 },
-    "usdc-xlm": { rate: 8.33, change24h: -2.5 },
-    "usdc-eth": { rate: 0.00038, change24h: -3.7 },
-    "usdc-btc": { rate: 0.000019, change24h: -1.7 },
-    "eth-xlm": { rate: 22222.22, change24h: 1.2 },
-    "eth-usdc": { rate: 2631.58, change24h: 3.7 },
-    "eth-btc": { rate: 0.05, change24h: -2.0 },
-    "btc-xlm": { rate: 416666.67, change24h: -0.8 },
-    "btc-usdc": { rate: 52631.58, change24h: 1.7 },
-    "btc-eth": { rate: 20, change24h: 2.0 }
-  })
+  // Assets state 
+  const [userAssets, setUserAssets] = useState<Asset[]>([])
+  const [isLoadingAssets, setIsLoadingAssets] = useState(true)
   
+  // Swap history
   const [swapHistory, setSwapHistory] = useState<SwapHistory[]>([])
   
-  const [fromAsset, setFromAsset] = useState("xlm")
-  const [toAsset, setToAsset] = useState("usdc")
+  // Form state
+  const [recipient, setRecipient] = useState("")
+  const [resolvedRecipient, setResolvedRecipient] = useState("")
+  const [fromAsset, setFromAsset] = useState<string>("native") // Default to XLM
   const [fromAmount, setFromAmount] = useState("")
-  const [toAmount, setToAmount] = useState("")
   const [slippage, setSlippage] = useState("0.5")
   
-  // Initialize Soroban client
-  const sorobanClient = new Client({
-    ...networks.testnet,
-    rpcUrl: "https://soroban-testnet.stellar.org:443"
-  })
-
-  // Initialize Soroban RPC server for direct API calls
-  const server = new SorobanRpc.Server("https://soroban-testnet.stellar.org:443")
-  
-  // Connect wallet function
-  const connectWallet = async () => {
-    try {
-      // In a real implementation, this would use Freighter or another Stellar wallet
-      if (typeof window !== 'undefined' && (window as any).freighter) {
-        const freighter = (window as any).freighter
-        
-        if (!await freighter.isConnected()) {
-          setStatusMessage('Please install Freighter wallet extension')
-          return
-        }
-        
-        const { publicKey } = await freighter.getUserInfo()
-        if (publicKey) {
-          setUserPublicKey(publicKey)
-          setIsWalletConnected(true)
-          
-          // In a production app, we would fetch real balances here
-          // fetchUserBalances(publicKey)
-          
-          setStatusMessage('Wallet connected successfully')
-        }
-      } else {
-        setStatusMessage('Freighter wallet not detected. Please install the extension.')
-      }
-    } catch (error) {
-      console.error('Error connecting wallet:', error)
-      setStatusMessage('Failed to connect wallet')
-    }
+  // Fixed destination asset (USDC)
+  const usdcAsset: Asset = {
+    id: `USDC:${USDC_CONTRACT_ADDRESS}`,
+    name: "USD Coin",
+    symbol: "USDC",
+    balance: "0",
+    icon: "/assets/usdc-icon.png",
+    address: USDC_CONTRACT_ADDRESS
   }
   
-  // Get current price data for the selected asset pair
-  const getCurrentPriceData = () => {
-    const key = `${fromAsset}-${toAsset}`
-    return priceData[key] || { rate: 0, change24h: 0 }
-  }
-  
-  // Calculate the to amount based on from amount and rate
+  // Initialize contract client
   useEffect(() => {
-    if (fromAmount) {
-      const currentPrice = getCurrentPriceData()
-      const calculated = parseFloat(fromAmount) * currentPrice.rate
-      setToAmount(calculated.toFixed(calculated < 0.01 ? 6 : 2))
-    } else {
-      setToAmount("")
+    const client = new Client.Client({
+      ...Client.networks.testnet,
+      rpcUrl: sorobanRpcUrl
+    });
+    setContractClient(client);
+  }, []);
+  
+  // Load user data
+  useEffect(() => {
+    if (isConnected && publicKey) {
+      loadUsername();
+      fetchBalances();
     }
-  }, [fromAmount, fromAsset, toAsset])
+  }, [isConnected, publicKey]);
+  
+  // Fetch user balances
+  const fetchBalances = async () => {
+    if (!publicKey) return;
+    
+    try {
+      setIsLoadingAssets(true);
+      const xlmBalance = await getBalance();
+      
+      // Fetch asset balances from Horizon
+      const server = new Horizon.Server(horizonUrl);
+      const account = await server.loadAccount(publicKey);
+      
+      const updatedAssets: Asset[] = [
+        { 
+          id: "native", 
+          name: "Stellar Lumens", 
+          symbol: "XLM", 
+          balance: xlmBalance,
+          icon: "/xlm-icon.png",
+          address: XLM_CONTRACT_ADDRESS
+        },
+      ];
+      
+      // Add other assets from account
+      account.balances.forEach((balance: any) => {
+        if (balance.asset_type !== 'native') {
+          const assetCode = balance.asset_code;
+          updatedAssets.push({
+            id: `${assetCode}:${balance.asset_issuer}`,
+            name: assetCode,
+            symbol: assetCode,
+            balance: balance.balance,
+            icon: `/assets/${assetCode.toLowerCase()}-icon.png`,
+            address: balance.asset_issuer
+          });
+        }
+      });
+      
+      // Add USDC if not already in the list
+      if (!updatedAssets.some(asset => asset.id === usdcAsset.id)) {
+        updatedAssets.push(usdcAsset);
+      }
+      
+      setUserAssets(updatedAssets);
+    } catch (error) {
+      console.log("Error fetching balances:", error);
+      toast.error("Failed to load balances");
+    } finally {
+      setIsLoadingAssets(false);
+    }
+  };
+  
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Only allow numbers with up to 7 decimal places
+    if (/^\d*\.?\d{0,7}$/.test(value) || value === "") {
+      setFromAmount(value);
+    }
+  }
+  
+  // Calculate estimated USDC amount (in a real app, this would use an oracle or exchange rate API)
+  const calculateUSDCAmount = (amount: string): string => {
+    if (!amount || isNaN(parseFloat(amount))) return "0";
+    // Simple conversion example - in a real app this would use market rates
+    // Assuming 1 XLM = 0.12 USDC for this example
+    return (parseFloat(amount) * 0.12).toFixed(6);
+  }
   
   // Calculate min amount based on slippage
-  const calculateMinAmount = (amount: string, slippagePercent: string) => {
-    const value = parseFloat(amount)
-    const slippageValue = parseFloat(slippagePercent) / 100
-    return (value * (1 - slippageValue)).toString()
+  const calculateMinAmount = (amount: string, slippagePercent: string): string => {
+    const value = parseFloat(amount);
+    if (isNaN(value) || value <= 0) return "0";
+    const slippageValue = parseFloat(slippagePercent) / 100;
+    return (value * (1 - slippageValue)).toFixed(6);
   }
   
-  // Handle swap form submit
-  const handleSwap = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!fromAmount || !toAmount || !isWalletConnected) {
-      setStatusMessage('Please connect your wallet and enter swap amounts')
-      return
+  // Get selected from asset
+  const getSelectedFromAsset = (): Asset | undefined => {
+    return userAssets.find(a => a.id === fromAsset);
+  }
+  
+  // Get max available balance
+  const getMaxBalance = (): string => {
+    const asset = getSelectedFromAsset();
+    return asset ? asset.balance : "0";
+  }
+  
+  // Set max amount
+  const setMaxAmount = () => {
+    setFromAmount(getMaxBalance());
+  }
+  
+  // Handle swap using smart contract
+  const handleSmartContractSwap = async () => {
+    if (!contractClient || !publicKey) {
+      toast.error("Smart contract client not initialized or wallet not connected");
+      return;
     }
     
-    setIsSubmitting(true)
-    setTxStatus('pending')
-    setStatusMessage('Preparing swap transaction...')
+    if (!resolvedRecipient) {
+      toast.error("Invalid recipient address");
+      return;
+    }
     
     try {
-      // Get the token addresses
-      const fromTokenAddress = assets.find(a => a.id === fromAsset)?.address
-      const toTokenAddress = assets.find(a => a.id === toAsset)?.address
+      setIsSubmitting(true);
+      setTxStatus('pending');
+      setStatusMessage('Preparing smart contract swap...');
       
-      if (!fromTokenAddress || !toTokenAddress || !userPublicKey) {
-        throw new Error('Missing token addresses or user public key')
+      const selectedAsset = getSelectedFromAsset();
+      if (!selectedAsset || !selectedAsset.address) {
+        throw new Error("Selected asset doesn't have a contract address");
       }
       
-      // Calculate min amounts with slippage
-      const minToAmount = calculateMinAmount(toAmount, slippage)
+      // Convert amounts to integers (stroops)
+      const amountA = BigInt(Math.floor(parseFloat(fromAmount) * 10000000)); // Convert to stroops
+      const estimatedUsdcAmount = parseFloat(calculateUSDCAmount(fromAmount));
+      const minBForA = BigInt(Math.floor(estimatedUsdcAmount * (1 - parseFloat(slippage) / 100) * 10000000));
       
-      // In a real implementation, we would get the counterparty address from an order book
-      // For demo purposes, we're using a mock counterparty
-      const counterpartyAddress = "GDXM5P2TWLSQ2WLDMQKXLBGQD6A6CBFMJTWLJ6TGEIBRI3YJV2PSM777"
+      // For simplicity, using fixed values for the recipient side
+      const amountB = BigInt(Math.floor(estimatedUsdcAmount * 10000000));
+      const minAForB = BigInt(Math.floor(parseFloat(fromAmount) * (1 - parseFloat(slippage) / 100) * 10000000));
       
-      // Prepare swap parameters
-      const tx = await sorobanClient.swap({
-        a: userPublicKey,
-        b: counterpartyAddress,
-        token_a: fromTokenAddress,
-        token_b: toTokenAddress,
-        amount_a: BigInt(Math.floor(parseFloat(fromAmount) * 10000000)), // Convert to Stellar precision
-        min_b_for_a: BigInt(Math.floor(parseFloat(minToAmount) * 10000000)),
-        amount_b: BigInt(Math.floor(parseFloat(toAmount) * 10000000)),
-        min_a_for_b: BigInt(Math.floor(parseFloat(fromAmount) * 0.95 * 10000000)), // 5% slippage for counterparty
-      })
+      setStatusMessage('Calling swap contract...');
+      const tx = await contractClient.swap({
+        a: publicKey,
+        b: resolvedRecipient,
+        token_a: XLM_CONTRACT_ADDRESS,
+        token_b: USDC_CONTRACT_ADDRESS,
+        amount_a: BigInt(amountA.toString()),
+        min_b_for_a: BigInt(minBForA.toString()),
+        amount_b: BigInt(amountB.toString()),
+        min_a_for_b: BigInt(minAForB.toString())
+      });
       
-      setStatusMessage('Please sign the transaction in your wallet...')
+      setStatusMessage('Please sign the transaction in your wallet...');
+      const signedTx = await tx.signAndSend();
       
-      // In a real implementation, this would be signed by the wallet
-      if (typeof window !== 'undefined' && (window as any).freighter) {
-        const signedXdr = await (window as any).freighter.signTransaction(tx.toXDR(), {
-          networkPassphrase: networks.testnet.networkPassphrase,
-        })
-        
-        // Submit the signed transaction
-        setStatusMessage('Submitting transaction to the network...')
-        const response = await server.sendTransaction(signedXdr)
-        
-        // Poll for transaction status
-        let finalStatus = response.status
-        let txHash = response.hash
-        
-        if (finalStatus === 'PENDING') {
-          setStatusMessage('Transaction submitted, waiting for confirmation...')
-          
-          // In a real app, we would poll the transaction status here
-          // For this example, we'll simulate success after a delay
-          await new Promise(resolve => setTimeout(resolve, 2000))
-          
-          finalStatus = 'SUCCESS'
-        }
-        
-        if (finalStatus === 'SUCCESS') {
-          // Create swap history entry
-          const newSwap: SwapHistory = {
-            id: `s${swapHistory.length + 1}`,
-            fromAsset: assets.find(a => a.id === fromAsset)?.symbol || "",
-            toAsset: assets.find(a => a.id === toAsset)?.symbol || "",
-            fromAmount,
-            toAmount,
-            date: new Date().toISOString(),
-            status: 'completed',
-            txId: txHash
-          }
-          
-          setSwapHistory([newSwap, ...swapHistory])
-          
-          // Update balances (in a real app, would fetch from blockchain)
-          const updatedAssets = assets.map(asset => {
-            if (asset.id === fromAsset) {
-              const newBalance = parseFloat(asset.balance) - parseFloat(fromAmount)
-              return { ...asset, balance: newBalance.toFixed(2) }
-            }
-            if (asset.id === toAsset) {
-              const newBalance = parseFloat(asset.balance) + parseFloat(toAmount)
-              return { ...asset, balance: newBalance.toFixed(2) }
-            }
-            return asset
-          })
-          
-          setAssets(updatedAssets)
-          setFromAmount("")
-          setToAmount("")
-          setTxStatus('success')
-          setStatusMessage('Swap completed successfully!')
-        } else {
-          throw new Error(`Transaction failed with status: ${finalStatus}`)
-        }
-      } else {
-        throw new Error('Wallet not available for signing')
-      }
-    } catch (error) {
-      console.error('Swap error:', error)
-      setTxStatus('error')
-      setStatusMessage(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setTxStatus('success');
+      setStatusMessage(`Successfully swapped ${fromAmount} ${selectedAsset.symbol} for USDC`);
+      toast.success(`Successfully swapped ${fromAmount} ${selectedAsset.symbol} for USDC`);
       
-      // Add failed transaction to history
-      const failedSwap: SwapHistory = {
-        id: `s${swapHistory.length + 1}`,
-        fromAsset: assets.find(a => a.id === fromAsset)?.symbol || "",
-        toAsset: assets.find(a => a.id === toAsset)?.symbol || "",
+      // Add to history
+      const newSwap: SwapHistory = {
+        id: `swap-${Date.now()}`,
+        fromAsset: selectedAsset.symbol,
+        toAsset: "USDC",
         fromAmount,
-        toAmount,
+        toAmount: estimatedUsdcAmount.toString(),
         date: new Date().toISOString(),
-        status: 'failed'
+        recipient: resolvedRecipient,
+        recipientUsername: recipient.startsWith('@') ? recipient.substring(1) : undefined,
+        status: 'completed',
+        txId: signedTx?.sendTransactionResponse?.hash
+      };
+      
+      setSwapHistory([newSwap, ...swapHistory]);
+      
+      // Reset form
+      setFromAmount("");
+      
+      // Refresh balances
+      setTimeout(fetchBalances, 3000);
+      
+    } catch (error: any) {
+      console.log("Smart contract swap error:", error);
+      setTxStatus('error');
+      setStatusMessage(`Swap failed: ${error.message || "Unknown error"}`);
+      toast.error(`Swap failed: ${error.message || "Unknown error"}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  // Handle swap submission
+  const handleSwap = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!isConnected || !publicKey || !currentAccount) {
+      toast.error("Please connect your wallet");
+      return;
+    }
+    
+    if (!recipient) {
+      toast.error("Please enter a recipient");
+      return;
+    }
+    
+    if (!fromAmount || parseFloat(fromAmount) <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+    
+    const selectedAsset = getSelectedFromAsset();
+    if (!selectedAsset) {
+      toast.error("Please select an asset");
+      return;
+    }
+    
+    // Check for sufficient balance
+    if (parseFloat(fromAmount) > parseFloat(getMaxBalance())) {
+      toast.error("Insufficient balance");
+      return;
+    }
+    
+    // Always try to use the atomic swap contract
+    if (contractClient) {
+      await handleSmartContractSwap();
+      return;
+    }
+    
+    // Fallback to traditional payment if contract client isn't available
+    try {
+      setIsSubmitting(true);
+      setTxStatus('pending');
+      setStatusMessage('Preparing swap transaction...');
+      
+      // Calculate USDC amount (this would use an oracle in a real app)
+      const estimatedUsdcAmount = calculateUSDCAmount(fromAmount);
+      
+      // Use resolved recipient if it's a username, otherwise use the direct input
+      const actualRecipient = resolvedRecipient || recipient;
+      
+      // Check if destination account exists
+      let createAccount = false;
+      try {
+        const server = new Horizon.Server(horizonUrl);
+        await server.loadAccount(actualRecipient);
+      } catch (error: any) {
+        if (error.status === 404) {
+          createAccount = true;
+          if (selectedAsset.id !== "native") {
+            toast.error("New accounts can only be created with XLM");
+            setTxStatus('error');
+            setStatusMessage("New accounts can only be created with XLM");
+            return;
+          }
+          if (parseFloat(fromAmount) < 1) {
+            toast.error("New accounts require at least 1 XLM");
+            setTxStatus('error');
+            setStatusMessage("New accounts require at least 1 XLM");
+            return;
+          }
+          toast.info("Destination account does not exist. This will create a new account.");
+        } else {
+          throw error;
+        }
       }
       
-      setSwapHistory([failedSwap, ...swapHistory])
+      // Create payment transaction
+      setStatusMessage('Creating transaction...');
+      const { transaction, network_passphrase } = await createPaymentTransaction({
+        source: publicKey,
+        destination: actualRecipient,
+        amount: fromAmount,
+        asset: selectedAsset.id,
+        memo: `Swap ${selectedAsset.symbol} to USDC`
+      });
+      
+      // Sign the transaction
+      setStatusMessage('Please sign the transaction in your wallet...');
+      const signedTransaction = await sign({
+        transactionXDR: transaction,
+        network: network_passphrase,
+      } as any);
+      
+      // Submit transaction to network
+      setStatusMessage('Submitting transaction to the network...');
+      const result = await submitTransaction(signedTransaction);
+      
+      // Record the transaction in history
+      const recipientUsername = recipient.startsWith('@') ? recipient.substring(1) : undefined;
+      
+      const newSwap: SwapHistory = {
+        id: `swap-${Date.now()}`,
+        fromAsset: selectedAsset.symbol,
+        toAsset: "USDC",
+        fromAmount,
+        toAmount: estimatedUsdcAmount,
+        date: new Date().toISOString(),
+        recipient: actualRecipient,
+        recipientUsername,
+        status: 'completed',
+        txId: result?.hash
+      };
+      
+      setSwapHistory([newSwap, ...swapHistory]);
+      setTxStatus('success');
+      setStatusMessage(`Successfully sent ${fromAmount} ${selectedAsset.symbol}`);
+      toast.success(`Successfully sent ${fromAmount} ${selectedAsset.symbol}`);
+      
+      // Reset form
+      setFromAmount("");
+      
+      // Refresh balances
+      setTimeout(fetchBalances, 3000);
+      
+    } catch (error: any) {
+      console.log("Swap error:", error);
+      setTxStatus('error');
+      setStatusMessage(`Swap failed: ${error.message || "Unknown error"}`);
+      toast.error(`Swap failed: ${error.message || "Unknown error"}`);
+      
+      // Add failed transaction to history if appropriate
+      if (fromAmount && getSelectedFromAsset()) {
+        const recipientUsername = recipient.startsWith('@') ? recipient.substring(1) : undefined;
+        const failedSwap: SwapHistory = {
+          id: `swap-failed-${Date.now()}`,
+          fromAsset: getSelectedFromAsset()!.symbol,
+          toAsset: "USDC",
+          fromAmount,
+          toAmount: calculateUSDCAmount(fromAmount),
+          date: new Date().toISOString(),
+          recipient: resolvedRecipient || recipient,
+          recipientUsername,
+          status: 'failed'
+        };
+        setSwapHistory([failedSwap, ...swapHistory]);
+      }
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
   
-  // Switch the from and to assets
-  const switchAssets = () => {
-    const temp = fromAsset
-    setFromAsset(toAsset)
-    setToAsset(temp)
-    setFromAmount("")
-    setToAmount("")
-  }
-  
-  // Get max available balance for the selected asset
-  const getMaxBalance = () => {
-    const asset = assets.find(a => a.id === fromAsset)
-    return asset ? asset.balance : "0"
-  }
-  
-  // Set max balance to from amount
-  const setMaxAmount = () => {
-    setFromAmount(getMaxBalance())
-  }
-  
-  const currentPrice = getCurrentPriceData()
+  // Calculate estimated USDC amount from the current input
+  const estimatedUsdcAmount = calculateUSDCAmount(fromAmount);
   
   return (
-    <div className="container mx-auto space-y-8">
+    <div className="container mx-auto space-y-8 py-8">
       <Particles />
       <h1 className="text-3xl font-bold tracking-tight">Swap Tokens</h1>
-      
-      {/* Wallet Connection Status */}
-      <div className="flex justify-between items-center">
-        <div>
-          {isWalletConnected ? (
-            <div className="text-sm">
-              <span className="text-green-400">●</span> Connected: {userPublicKey?.slice(0, 6)}...{userPublicKey?.slice(-4)}
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">Wallet not connected</div>
-          )}
-        </div>
-        
-        <Button 
-          onClick={connectWallet} 
-          disabled={isWalletConnected}
-          variant={isWalletConnected ? "outline" : "default"}
-          size="sm"
-        >
-          {isWalletConnected ? "Connected" : "Connect Wallet"}
-        </Button>
-      </div>
       
       {/* Status Messages */}
       {statusMessage && (
@@ -388,226 +447,276 @@ export default function SwapPage() {
       
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="col-span-1 md:col-span-2">
-          <div className="bg-white/10 rounded-xl p-6 border shadow-sm">
-            <h2 className="text-xl font-semibold mb-4">Swap</h2>
-            <form onSubmit={handleSwap} className="space-y-6">
-              {/* From Asset */}
-              <div className="rounded-xl border bg-muted/20 p-4">
-                <div className="flex justify-between mb-2">
-                  <label className="block text-sm font-medium">From</label>
-                  <button 
-                    type="button" 
-                    className="text-xs text-primary"
-                    onClick={setMaxAmount}
-                  >
-                    Max: {getMaxBalance()}
-                  </button>
-                </div>
-                
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={fromAmount}
-                    onChange={(e) => setFromAmount(e.target.value)}
-                    className="w-full bg-transparent text-2xl font-medium focus:outline-none"
-                    placeholder="0.00"
-                    step="any"
-                    min="0"
-                    required
+          <Card>
+            <CardHeader>
+              <CardTitle>Swap Tokens to USDC</CardTitle>
+              <CardDescription>
+                Send tokens to someone and they'll receive USDC via atomic swap
+              </CardDescription>
+            </CardHeader>
+            <form onSubmit={handleSwap}>
+              <CardContent className="space-y-6">
+                {/* Recipient */}
+                <div className="space-y-2">
+                  <Label htmlFor="recipient">Recipient</Label>
+                  <RecipientInput
+                    value={recipient}
+                    onChange={(value, resolvedAddress) => {
+                      setRecipient(value);
+                      setResolvedRecipient(resolvedAddress || "");
+                    }}
+                    placeholder="Enter public key or username"
                   />
+                </div>
+              
+                {/* From Asset */}
+                <div className="rounded-xl border bg-muted/20 p-4">
+                  <div className="flex justify-between mb-2">
+                    <Label className="text-sm font-medium">From</Label>
+                    <button 
+                      type="button" 
+                      className="text-xs text-primary"
+                      onClick={setMaxAmount}
+                    >
+                      Max: {isLoadingAssets ? "Loading..." : getMaxBalance()}
+                    </button>
+                  </div>
                   
-                  <select
-                    value={fromAsset}
-                    onChange={(e) => setFromAsset(e.target.value)}
-                    className="min-w-[120px] rounded-md border border-input bg-background px-3 py-2"
-                  >
-                    {assets.map(asset => (
-                      asset.id !== toAsset && (
-                        <option key={asset.id} value={asset.id}>
-                          {asset.symbol}
-                        </option>
-                      )
-                    ))}
-                  </select>
-                </div>
-                
-                <div className="text-xs text-muted-foreground mt-2">
-                  {assets.find(a => a.id === fromAsset)?.name} - Available: {assets.find(a => a.id === fromAsset)?.balance}
-                </div>
-              </div>
-              
-              {/* Switch Button */}
-              <div className="flex justify-center -my-3">
-                <button 
-                  type="button" 
-                  onClick={switchAssets}
-                  className="bg-muted rounded-full p-2 border shadow-sm hover:bg-accent"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                    <path d="m17 4 3 3-3 3"></path>
-                    <path d="M20 7H4"></path>
-                    <path d="m7 20-3-3 3-3"></path>
-                    <path d="M4 17h16"></path>
-                  </svg>
-                </button>
-              </div>
-              
-              {/* To Asset */}
-              <div className="rounded-xl border bg-muted/20 p-4">
-                <div className="flex justify-between mb-2">
-                  <label className="block text-sm font-medium">To</label>
-                  <span className="text-xs text-muted-foreground">
-                    Balance: {assets.find(a => a.id === toAsset)?.balance}
-                  </span>
-                </div>
-                
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={toAmount}
-                    readOnly
-                    className="w-full bg-transparent text-2xl font-medium focus:outline-none"
-                    placeholder="0.00"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={fromAmount}
+                      onChange={handleAmountChange}
+                      className="w-full bg-transparent text-2xl font-medium focus:outline-none"
+                      placeholder="0.00"
+                      required
+                    />
+                    
+                    <Select
+                      value={fromAsset}
+                      onValueChange={setFromAsset}
+                    >
+                      <SelectTrigger className="min-w-[140px]">
+                        <SelectValue placeholder="Select asset" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {userAssets.map(asset => (
+                          <SelectItem key={asset.id} value={asset.id}>
+                            <div className="flex items-center gap-2">
+                              <span>{asset.symbol}</span>
+                              <span className="text-muted-foreground text-xs">
+                                {parseFloat(asset.balance).toFixed(4)}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                        {isLoadingAssets && (
+                          <div className="flex justify-center p-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          </div>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   
-                  <select
-                    value={toAsset}
-                    onChange={(e) => setToAsset(e.target.value)}
-                    className="min-w-[120px] rounded-md border border-input bg-background px-3 py-2"
-                  >
-                    {assets.map(asset => (
-                      asset.id !== fromAsset && (
-                        <option key={asset.id} value={asset.id}>
-                          {asset.symbol}
-                        </option>
-                      )
-                    ))}
-                  </select>
-                </div>
-                
-                <div className="text-xs text-muted-foreground mt-2">
-                  {assets.find(a => a.id === toAsset)?.name}
-                </div>
-              </div>
-              
-              {/* Price Info */}
-              <div className="bg-muted/20 rounded-md p-3 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Exchange Rate</span>
-                  <span className="font-medium">
-                    1 {assets.find(a => a.id === fromAsset)?.symbol} = {currentPrice.rate} {assets.find(a => a.id === toAsset)?.symbol}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-muted-foreground">Price Change (24h)</span>
-                  <span className={`font-medium ${currentPrice.change24h >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                    {currentPrice.change24h >= 0 ? '+' : ''}{currentPrice.change24h}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-muted-foreground">Slippage Tolerance</span>
-                  <div className="flex gap-1">
-                    {['0.5', '1', '2', '3'].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setSlippage(value)}
-                        className={`px-2 py-1 rounded-md text-xs ${slippage === value ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
-                      >
-                        {value}%
-                      </button>
-                    ))}
+                  <div className="text-xs text-muted-foreground mt-2">
+                    {getSelectedFromAsset()?.name || "Select an asset"} - Available: {getMaxBalance()}
                   </div>
                 </div>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-muted-foreground">Minimum Received</span>
-                  <span className="font-medium">
-                    {toAmount ? parseFloat(calculateMinAmount(toAmount, slippage)).toFixed(6) : '0'} {assets.find(a => a.id === toAsset)?.symbol}
-                  </span>
+                
+                {/* Arrow Down */}
+                <div className="flex justify-center my-2">
+                  <div className="bg-muted rounded-full p-2">
+                    <ArrowDownUp className="h-4 w-4" />
+                  </div>
                 </div>
-              </div>
+                
+                {/* To Asset (USDC) */}
+                <div className="rounded-xl border bg-muted/20 p-4">
+                  <div className="flex justify-between mb-2">
+                    <Label className="text-sm font-medium">To (USDC)</Label>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={estimatedUsdcAmount}
+                      readOnly
+                      className="w-full bg-transparent text-2xl font-medium focus:outline-none"
+                      placeholder="0.00"
+                    />
+                    
+                    <div className="min-w-[140px] flex items-center gap-2 justify-center border rounded-md px-3">
+                      <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">$</div>
+                      <span>USDC</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground mt-2">
+                    USD Coin - Stellar token
+                  </div>
+                </div>
+                
+                {/* Price Info & Slippage */}
+                <div className="bg-muted/20 rounded-md p-3 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Estimated Rate</span>
+                    <span className="font-medium">
+                      1 {getSelectedFromAsset()?.symbol || "XLM"} ≈ 0.12 USDC
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="text-muted-foreground">Slippage Tolerance</span>
+                    <div className="flex gap-1">
+                      {['0.5', '1', '2', '3'].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setSlippage(value)}
+                          className={`px-2 py-1 rounded-md text-xs ${slippage === value ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                        >
+                          {value}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="text-muted-foreground">Minimum Received</span>
+                    <span className="font-medium">
+                      {calculateMinAmount(estimatedUsdcAmount, slippage)} USDC
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
               
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={!isWalletConnected || !fromAmount || parseFloat(fromAmount) <= 0 || parseFloat(fromAmount) > parseFloat(getMaxBalance()) || isSubmitting}
-              >
-                {!isWalletConnected 
-                  ? 'Connect Wallet' 
-                  : !fromAmount 
-                    ? 'Enter Amount' 
-                    : parseFloat(fromAmount) > parseFloat(getMaxBalance())
-                      ? 'Insufficient Balance'
-                      : isSubmitting
-                        ? 'Processing...'
-                        : 'Swap'}
-              </Button>
+              <CardFooter>
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={
+                    !isConnected || 
+                    !recipient || 
+                    !fromAmount || 
+                    parseFloat(fromAmount) <= 0 || 
+                    parseFloat(fromAmount) > parseFloat(getMaxBalance()) || 
+                    isSubmitting
+                  }
+                >
+                  {!isConnected 
+                    ? 'Connect Wallet' 
+                    : !recipient
+                      ? 'Enter Recipient'
+                      : !fromAmount 
+                        ? 'Enter Amount' 
+                        : parseFloat(fromAmount) > parseFloat(getMaxBalance())
+                          ? 'Insufficient Balance'
+                          : isSubmitting
+                            ? 'Processing...'
+                            : contractClient
+                              ? 'Atomic Swap with USDC'
+                              : 'Swap'}
+                </Button>
+              </CardFooter>
             </form>
-          </div>
+          </Card>
         </div>
         
-        {/* Swap History */}
-        <div className="col-span-1">
-          <div className="bg-white/10 rounded-xl p-6 border shadow-sm">
-            <h3 className="text-lg font-semibold mb-4">Swap History</h3>
-            <div className="space-y-4">
-              {swapHistory.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No swap history</p>
-              ) : (
-                swapHistory.map((swap) => (
-                  <div key={swap.id} className="p-3 rounded-md border text-sm">
-                    <div className="flex justify-between items-center">
-                      <div className="font-medium">
-                        {swap.fromAmount} {swap.fromAsset} → {swap.toAmount} {swap.toAsset}
+        {/* Swap History & Assets */}
+        <div className="col-span-1 space-y-6">
+          {/* Swap History */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Swap History</CardTitle>
+              <CardDescription>Your recent token swaps</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {swapHistory.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No swap history</p>
+                ) : (
+                  <div className="max-h-[300px] overflow-y-auto space-y-3">
+                    {swapHistory.map((swap) => (
+                      <div key={swap.id} className="p-3 rounded-md border text-sm">
+                        <div className="flex justify-between items-center">
+                          <div className="font-medium">
+                            {swap.fromAmount} {swap.fromAsset} → {swap.toAmount} {swap.toAsset}
+                          </div>
+                          <div className={`text-xs px-2 py-0.5 rounded-full ${
+                            swap.status === 'completed' 
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
+                              : swap.status === 'pending' 
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' 
+                                : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                          }`}>
+                            {swap.status}
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-2">
+                          To: {swap.recipientUsername ? `@${swap.recipientUsername}` : `${swap.recipient.substring(0, 8)}...${swap.recipient.substring(swap.recipient.length - 8)}`}
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>{new Date(swap.date).toLocaleString()}</span>
+                          {swap.txId && (
+                            <a 
+                              href={`https://testnet.stellarchain.io/tx/${swap.txId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              View Transaction
+                            </a>
+                          )}
+                        </div>
                       </div>
-                      <div className={`text-xs px-2 py-0.5 rounded-full ${swap.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : swap.status === 'pending' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'}`}>
-                        {swap.status}
-                      </div>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                      <span>{new Date(swap.date).toLocaleString()}</span>
-                      {swap.txId && (
-                        <a 
-                          href={`https://testnet.stellarchain.io/tx/${swap.txId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono truncate max-w-[100px] hover:text-primary"
-                        >
-                          {swap.txId.slice(0, 8)}...
-                        </a>
-                      )}
-                    </div>
+                    ))}
                   </div>
-                ))
-              )}
-            </div>
-          </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
           
-          {/* Assets */}
-          <div className="bg-white/10 rounded-xl p-6 border shadow-sm mt-4">
-            <h3 className="text-lg font-semibold mb-4">Available Assets</h3>
-            <div className="space-y-3">
-              {assets.map((asset) => (
-                <div key={asset.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                      <span className="text-xs font-bold">{asset.symbol}</span>
-                    </div>
-                    <div>
-                      <div className="font-medium">{asset.name}</div>
-                      <div className="text-xs text-muted-foreground">{asset.symbol}</div>
-                    </div>
+          {/* Available Assets */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Available Assets</CardTitle>
+              <CardDescription>Assets in your wallet</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {isLoadingAssets ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
-                  <div className="text-right">
-                    <div className="font-medium">{asset.balance}</div>
-                    <div className="text-xs text-muted-foreground">Available</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                ) : userAssets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No assets found in wallet</p>
+                ) : (
+                  userAssets.map((asset) => (
+                    <div key={asset.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                          {asset.symbol === "USDC" ? (
+                            <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">$</div>
+                          ) : (
+                            <span className="text-xs font-bold">{asset.symbol}</span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-medium">{asset.name}</div>
+                          <div className="text-xs text-muted-foreground">{asset.symbol}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">{parseFloat(asset.balance).toFixed(7)}</div>
+                        <div className="text-xs text-muted-foreground">Available</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
   )
-} 
+}

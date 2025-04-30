@@ -56,6 +56,12 @@ importers:
       axios:
         specifier: ^1.9.0
         version: 1.9.0
+      bignumber:
+        specifier: ^1.1.0
+        version: 1.1.0
+      bignumber.js:
+        specifier: ^9.3.0
+        version: 9.3.0
       bip39:
         specifier: ^3.1.0
         version: 3.1.0
@@ -946,6 +952,10 @@ packages:
 
   bignumber.js@9.3.0:
     resolution: {integrity: sha512-EM7aMFTXbptt/wZdMlBv2t8IViwQL+h6SLHosp8Yf0dqJMTnY6iL32opnAB6kAdL0SZPuvcAzFr31o0c/R3/RA==}
+
+  bignumber@1.1.0:
+    resolution: {integrity: sha512-EGqHCKkEAwVwufcEOCYhZQqdVH+7cNCyPZ9yxisYvSjHFB+d9YcGMvorsFpeN5IJpC+lC6K+FHhu8+S4MgJazw==}
+    engines: {node: '>=0.4.0'}
 
   bip39@3.1.0:
     resolution: {integrity: sha512-c9kiwdk45Do5GL0vJMe7tS95VjCii65mYAH7DfWl3uW8AVzXKQVUm64i3hzVybBDMp9r7j9iNxR85+ul8MdN/A==}
@@ -2500,6 +2510,8 @@ snapshots:
   base64url@3.0.1: {}
 
   bignumber.js@9.3.0: {}
+
+  bignumber@1.1.0: {}
 
   bip39@3.1.0:
     dependencies:

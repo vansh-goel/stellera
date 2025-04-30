@@ -102,7 +102,7 @@ export default function UsernamePay() {
         setSelectedAsset(updatedAssets[0]);
       }
     } catch (error) {
-      console.error("Error fetching balances:", error);
+      console.log("Error fetching balances:", error);
       toast.error("Failed to load balances");
     } finally {
       setIsLoadingBalance(false);
@@ -172,7 +172,7 @@ export default function UsernamePay() {
       const flattenedTxs = processedTxs.flat().filter(tx => tx && tx.address);
       setPaymentHistory(flattenedTxs as UserPayment[]);
     } catch (error) {
-      console.error("Error fetching transactions:", error);
+      console.log("Error fetching transactions:", error);
     }
   };
 
@@ -274,7 +274,7 @@ export default function UsernamePay() {
       }, 2000);
       
     } catch (error: any) {
-      console.error("Payment failed:", error);
+      console.log("Payment failed:", error);
       toast.error(`Payment failed: ${error.message || "Unknown error"}`);
     } finally {
       setIsSendingPayment(false);

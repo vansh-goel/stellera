@@ -96,7 +96,7 @@ export default function UserSearch({
         setOpen(true); // Open the dropdown to show results
       }
     } catch (error) {
-      console.error('Error processing input:', error);
+      console.log('Error processing input:', error);
     } finally {
       setLoading(false);
     }
@@ -152,7 +152,7 @@ export default function UserSearch({
         setUsers(filteredUsers);
       }
     } catch (error) {
-      console.error('Error searching users:', error);
+      console.log('Error searching users:', error);
     } finally {
       setLoading(false);
     }
@@ -190,11 +190,11 @@ export default function UserSearch({
         setInputValue('');
       } else {
         // Username not found - show error or notification
-        console.error('Username not found');
+        console.log('Username not found');
         // You could show a temporary message here
       }
     } catch (error) {
-      console.error('Error searching username:', error);
+      console.log('Error searching username:', error);
     } finally {
       setLoading(false);
     }
