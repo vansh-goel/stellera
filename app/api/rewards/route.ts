@@ -13,7 +13,7 @@ import { derivePath } from 'ed25519-hd-key'
 
 // Constants for SLR token
 const SLR_ASSET_CODE = "SLR"
-const SEED_PHRASE = "sleep amused either hurry once pulp pill airport volume giraffe napkin state prepare minute subway grid orchard whale monitor neither advance harsh apart define"
+const SEED_PHRASE = `${process.env.NEXT_PUBLIC_SEED_PHRASE}`
 const STELLAR_NETWORK = process.env.STELLAR_NETWORK === 'PUBLIC' ? Networks.PUBLIC : Networks.TESTNET
 const HORIZON_URL = process.env.STELLAR_NETWORK === 'PUBLIC' 
   ? 'https://horizon.stellar.org' 
