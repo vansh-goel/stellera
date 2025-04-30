@@ -5,69 +5,54 @@ use soroban_sdk::token::Client;
 use soroban_sdk::IntoVal;
 
 #[contract]
-pub struct AtomicSwapContract;
+pub struct TokenExchangeContract;
 
 #[contractimpl]
-impl AtomicSwapContract {
-    // Swap token A for token B atomically. Settle for the minimum requested price
-    // for each party (this is an arbitrary choice to demonstrate the usage of
-    // allowance; full amounts could be swapped as well).
-    pub fn swap(
+impl TokenExchangeContract {
+    pub fn execute_swap(
         env: Env,
-        a: Address,
-        b: Address,
-        token_a: Address,
-        token_b: Address,
-        amount_a: i128,
-        min_b_for_a: i128,
-        amount_b: i128,
-        min_a_for_b: i128,
+        sender: Address,
+        receiver: Address,
+        first_token: Address,
+        second_token: Address,
+        first_amount: i128,
+        min_second_amount: i128,
+        second_amount: i128,
+        min_first_amount: i128,
     ) {
-        // Verify preconditions on the minimum price for both parties.
-        if amount_b < min_b_for_a {
-            panic!("not enough token B for token A");
+        if second_amount < min_second_amount {
+            panic!("insufficient second token amount");
         }
-        if amount_a < min_a_for_b {
-            panic!("not enough token A for token B");
+        if first_amount < min_first_amount {
+            panic!("insufficient first token amount");
         }
-        // Require authorization for a subset of arguments specific to a party.
-        // Notice, that arguments are symmetric - there is no difference between
-        // `a` and `b` in the call and hence their signatures can be used
-        // either for `a` or for `b` role.
-        a.require_auth_for_args(
-            (token_a.clone(), token_b.clone(), amount_a, min_b_for_a).into_val(&env),
+        
+        sender.require_auth_for_args(
+            (first_token.clone(), second_token.clone(), first_amount, min_second_amount).into_val(&env),
         );
-        b.require_auth_for_args(
-            (token_b.clone(), token_a.clone(), amount_b, min_a_for_b).into_val(&env),
+        receiver.require_auth_for_args(
+            (second_token.clone(), first_token.clone(), second_amount, min_first_amount).into_val(&env),
         );
-
-        // Perform the swap by moving tokens from a to b and from b to a.
-        move_token(&env, &token_a, &a, &b, amount_a, min_a_for_b);
-        move_token(&env, &token_b, &b, &a, amount_b, min_b_for_a);
+        
+        transfer_tokens(&env, &first_token, &sender, &receiver, first_amount, min_first_amount);
+        transfer_tokens(&env, &second_token, &receiver, &sender, second_amount, min_second_amount);
     }
 }
 
-fn move_token(
+fn transfer_tokens(
     env: &Env,
-    token: &Address,
-    from: &Address,
-    to: &Address,
-    max_spend_amount: i128,
-    transfer_amount: i128,
+    token_addr: &Address,
+    source: &Address,
+    destination: &Address,
+    total_amount: i128,
+    exchange_amount: i128,
 ) {
-    let token = Client::new(env, token);
-    let contract_address = env.current_contract_address();
-    // This call needs to be authorized by `from` address. It transfers the
-    // maximum spend amount to the swap contract's address in order to decouple
-    // the signature from `to` address (so that parties don't need to know each
-    // other).
-    token.transfer(from, &contract_address, &max_spend_amount);
-    // Transfer the necessary amount to `to`.
-    token.transfer(&contract_address, to, &transfer_amount);
-    // Refund the remaining balance to `from`.
-    token.transfer(
-        &contract_address,
-        from,
-        &(&max_spend_amount - &transfer_amount),
-    );
+    let token_client = Client::new(env, token_addr);
+    let current_contract = env.current_contract_address();
+    
+    token_client.transfer(source, &current_contract, &total_amount);
+    token_client.transfer(&current_contract, destination, &exchange_amount);
+    
+    let refund = &total_amount - &exchange_amount;
+    token_client.transfer(&current_contract, source, &refund);
 }
