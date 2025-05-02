@@ -13,13 +13,11 @@ import { useWallet } from "@/app/providers/wallet-provider"
 import { useUsername } from "@/app/hooks/use-username"
 import { Horizon } from "@stellar/stellar-sdk"
 import { createPaymentTransaction, submitTransaction } from "@/lib/stellar-transactions"
+import { swapXlmForSlr, checkSlrTrustline, createSlrTrustlineTransaction, slrAsset } from "@/lib/slr-swap"
 import * as Client from "@/packages/hello_world"
 
-// USDC contract address on Stellar
-const USDC_CONTRACT_ADDRESS = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
-
-// XLM contract address on Stellar (needed for smart contract swap)
-const XLM_CONTRACT_ADDRESS = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+// SLR token issuer address
+const SLR_ISSUER_WALLET = slrAsset.getIssuer()
 
 // Network configuration
 const horizonUrl = "https://horizon-testnet.stellar.org"
@@ -32,7 +30,7 @@ interface Asset {
   symbol: string
   balance: string
   icon?: string
-  address?: string // Soroban token contract address
+  address?: string
 }
 
 type SwapHistory = {
@@ -52,9 +50,6 @@ export default function SwapPage() {
   const { wallet, isConnected, publicKey, getBalance, sign, currentAccount } = useWallet()
   const { username, loadUsername } = useUsername()
   
-  // Client instance for smart contract
-  const [contractClient, setContractClient] = useState<Client.Client | null>(null)
-  
   // State for wallet connection
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
@@ -73,33 +68,44 @@ export default function SwapPage() {
   const [fromAsset, setFromAsset] = useState<string>("native") // Default to XLM
   const [fromAmount, setFromAmount] = useState("")
   const [slippage, setSlippage] = useState("0.5")
+  const [hasTrustline, setHasTrustline] = useState(false)
   
-  // Fixed destination asset (USDC)
-  const usdcAsset: Asset = {
-    id: `USDC:${USDC_CONTRACT_ADDRESS}`,
-    name: "USD Coin",
-    symbol: "USDC",
+  // Fixed destination asset (SLR)
+  const slrTokenAsset: Asset = {
+    id: `SLR:${SLR_ISSUER_WALLET}`,
+    name: "Stellera Token",
+    symbol: "SLR",
     balance: "0",
-    icon: "/assets/usdc-icon.png",
-    address: USDC_CONTRACT_ADDRESS
+    icon: "/assets/slr-icon.png",
+    address: SLR_ISSUER_WALLET
   }
-  
-  // Initialize contract client
-  useEffect(() => {
-    const client = new Client.Client({
-      ...Client.networks.testnet,
-      rpcUrl: sorobanRpcUrl
-    });
-    setContractClient(client);
-  }, []);
   
   // Load user data
   useEffect(() => {
     if (isConnected && publicKey) {
       loadUsername();
       fetchBalances();
+      checkRecipientTrustline();
     }
   }, [isConnected, publicKey]);
+  
+  // Check if recipient has SLR trustline when recipient changes
+  useEffect(() => {
+    checkRecipientTrustline();
+  }, [resolvedRecipient]);
+  
+  // Check if recipient has trustline for SLR
+  const checkRecipientTrustline = async () => {
+    if (!resolvedRecipient) return;
+    
+    try {
+      const hasTrustline = await checkSlrTrustline(resolvedRecipient);
+      setHasTrustline(hasTrustline);
+    } catch (error) {
+      console.error("Error checking trustline:", error);
+      setHasTrustline(false);
+    }
+  };
   
   // Fetch user balances
   const fetchBalances = async () => {
@@ -119,29 +125,48 @@ export default function SwapPage() {
           name: "Stellar Lumens", 
           symbol: "XLM", 
           balance: xlmBalance,
-          icon: "/xlm-icon.png",
-          address: XLM_CONTRACT_ADDRESS
+          icon: "/xlm-icon.png"
         },
       ];
       
-      // Add other assets from account
+      // Add other assets from account including SLR if it exists
+      let slrFound = false;
+      
       account.balances.forEach((balance: any) => {
         if (balance.asset_type !== 'native') {
           const assetCode = balance.asset_code;
-          updatedAssets.push({
-            id: `${assetCode}:${balance.asset_issuer}`,
-            name: assetCode,
-            symbol: assetCode,
-            balance: balance.balance,
-            icon: `/assets/${assetCode.toLowerCase()}-icon.png`,
-            address: balance.asset_issuer
-          });
+          const assetIssuer = balance.asset_issuer;
+          
+          // Check if this is our SLR token
+          if (assetCode === "SLR" && assetIssuer === SLR_ISSUER_WALLET) {
+            slrFound = true;
+            updatedAssets.push({
+              id: `SLR:${SLR_ISSUER_WALLET}`,
+              name: "Stellera Token",
+              symbol: "SLR",
+              balance: balance.balance,
+              icon: "/assets/slr-icon.png",
+              address: SLR_ISSUER_WALLET
+            });
+          } else {
+            updatedAssets.push({
+              id: `${assetCode}:${assetIssuer}`,
+              name: assetCode,
+              symbol: assetCode,
+              balance: balance.balance,
+              icon: `/assets/${assetCode.toLowerCase()}-icon.png`,
+              address: assetIssuer
+            });
+          }
         }
       });
       
-      // Add USDC if not already in the list
-      if (!updatedAssets.some(asset => asset.id === usdcAsset.id)) {
-        updatedAssets.push(usdcAsset);
+      // Add SLR with zero balance if not found
+      if (!slrFound) {
+        updatedAssets.push({
+          ...slrTokenAsset,
+          balance: "0"
+        });
       }
       
       setUserAssets(updatedAssets);
@@ -161,12 +186,11 @@ export default function SwapPage() {
     }
   }
   
-  // Calculate estimated USDC amount (in a real app, this would use an oracle or exchange rate API)
-  const calculateUSDCAmount = (amount: string): string => {
+  // Calculate estimated SLR amount based on XLM input
+  const calculateSLRAmount = (amount: string): string => {
     if (!amount || isNaN(parseFloat(amount))) return "0";
-    // Simple conversion example - in a real app this would use market rates
-    // Assuming 1 XLM = 0.12 USDC for this example
-    return (parseFloat(amount) * 0.12).toFixed(6);
+    // Conversion rate: 1 XLM = 0.5 SLR
+    return (parseFloat(amount) * 0.5).toFixed(6);
   }
   
   // Calculate min amount based on slippage
@@ -193,87 +217,48 @@ export default function SwapPage() {
     setFromAmount(getMaxBalance());
   }
   
-  // Handle swap using smart contract
-  const handleSmartContractSwap = async () => {
-    if (!contractClient || !publicKey) {
-      toast.error("Smart contract client not initialized or wallet not connected");
-      return;
-    }
-    
-    if (!resolvedRecipient) {
-      toast.error("Invalid recipient address");
-      return;
+  // Create trustline for recipient if needed
+  const createTrustline = async () => {
+    if (!publicKey || !resolvedRecipient || !isConnected) {
+      toast.error("Please connect your wallet and enter a recipient");
+      return false;
     }
     
     try {
       setIsSubmitting(true);
       setTxStatus('pending');
-      setStatusMessage('Preparing smart contract swap...');
+      setStatusMessage('Creating trustline for SLR token...');
       
-      const selectedAsset = getSelectedFromAsset();
-      if (!selectedAsset || !selectedAsset.address) {
-        throw new Error("Selected asset doesn't have a contract address");
-      }
+      // Get transaction for creating trustline
+      const { transaction, network_passphrase } = await createSlrTrustlineTransaction(resolvedRecipient);
       
-      // Convert amounts to integers (stroops)
-      const amountA = BigInt(Math.floor(parseFloat(fromAmount) * 10000000)); // Convert to stroops
-      const estimatedUsdcAmount = parseFloat(calculateUSDCAmount(fromAmount));
-      const minBForA = BigInt(Math.floor(estimatedUsdcAmount * (1 - parseFloat(slippage) / 100) * 10000000));
+      // Sign the transaction (this requires the recipient's signature)
+      setStatusMessage('Please sign the transaction in your wallet to create trustline...');
+      const signedTransaction = await sign({
+        transactionXDR: transaction,
+        network: network_passphrase,
+      } as any);
       
-      // For simplicity, using fixed values for the recipient side
-      const amountB = BigInt(Math.floor(estimatedUsdcAmount * 10000000));
-      const minAForB = BigInt(Math.floor(parseFloat(fromAmount) * (1 - parseFloat(slippage) / 100) * 10000000));
+      // Submit transaction to network
+      setStatusMessage('Submitting trustline transaction to the network...');
+      await submitTransaction(signedTransaction);
       
-      setStatusMessage('Calling swap contract...');
-      const tx = await contractClient.swap({
-        a: publicKey,
-        b: resolvedRecipient,
-        token_a: XLM_CONTRACT_ADDRESS,
-        token_b: USDC_CONTRACT_ADDRESS,
-        amount_a: BigInt(amountA.toString()),
-        min_b_for_a: BigInt(minBForA.toString()),
-        amount_b: BigInt(amountB.toString()),
-        min_a_for_b: BigInt(minAForB.toString())
-      });
+      setHasTrustline(true);
+      setStatusMessage('Trustline created successfully!');
+      toast.success('Trustline created successfully!');
       
-      setStatusMessage('Please sign the transaction in your wallet...');
-      const signedTx = await tx.signAndSend();
-      
-      setTxStatus('success');
-      setStatusMessage(`Successfully swapped ${fromAmount} ${selectedAsset.symbol} for USDC`);
-      toast.success(`Successfully swapped ${fromAmount} ${selectedAsset.symbol} for USDC`);
-      
-      // Add to history
-      const newSwap: SwapHistory = {
-        id: `swap-${Date.now()}`,
-        fromAsset: selectedAsset.symbol,
-        toAsset: "USDC",
-        fromAmount,
-        toAmount: estimatedUsdcAmount.toString(),
-        date: new Date().toISOString(),
-        recipient: resolvedRecipient,
-        recipientUsername: recipient.startsWith('@') ? recipient.substring(1) : undefined,
-        status: 'completed',
-        txId: signedTx?.sendTransactionResponse?.hash
-      };
-      
-      setSwapHistory([newSwap, ...swapHistory]);
-      
-      // Reset form
-      setFromAmount("");
-      
-      // Refresh balances
-      setTimeout(fetchBalances, 3000);
-      
+      return true;
     } catch (error: any) {
-      console.log("Smart contract swap error:", error);
+      console.error("Error creating trustline:", error);
       setTxStatus('error');
-      setStatusMessage(`Swap failed: ${error.message || "Unknown error"}`);
-      toast.error(`Swap failed: ${error.message || "Unknown error"}`);
+      setStatusMessage(`Failed to create trustline: ${error.message || "Unknown error"}`);
+      toast.error(`Failed to create trustline: ${error.message || "Unknown error"}`);
+      
+      return false;
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
   
   // Handle swap submission
   const handleSwap = async (e: React.FormEvent) => {
@@ -306,25 +291,21 @@ export default function SwapPage() {
       return;
     }
     
-    // Always try to use the atomic swap contract
-    if (contractClient) {
-      await handleSmartContractSwap();
+    // Only XLM is supported for swap to SLR currently
+    if (selectedAsset.id !== "native") {
+      toast.error("Only XLM can be swapped for SLR tokens");
       return;
     }
     
-    // Fallback to traditional payment if contract client isn't available
+    // Use resolved recipient if it's a username, otherwise use the direct input
+    const actualRecipient = resolvedRecipient || recipient;
+    
     try {
       setIsSubmitting(true);
       setTxStatus('pending');
-      setStatusMessage('Preparing swap transaction...');
+      setStatusMessage('Preparing transaction...');
       
-      // Calculate USDC amount (this would use an oracle in a real app)
-      const estimatedUsdcAmount = calculateUSDCAmount(fromAmount);
-      
-      // Use resolved recipient if it's a username, otherwise use the direct input
-      const actualRecipient = resolvedRecipient || recipient;
-      
-      // Check if destination account exists
+      // Check if recipient account exists
       let createAccount = false;
       try {
         const server = new Horizon.Server(horizonUrl);
@@ -332,16 +313,11 @@ export default function SwapPage() {
       } catch (error: any) {
         if (error.status === 404) {
           createAccount = true;
-          if (selectedAsset.id !== "native") {
-            toast.error("New accounts can only be created with XLM");
-            setTxStatus('error');
-            setStatusMessage("New accounts can only be created with XLM");
-            return;
-          }
           if (parseFloat(fromAmount) < 1) {
             toast.error("New accounts require at least 1 XLM");
             setTxStatus('error');
             setStatusMessage("New accounts require at least 1 XLM");
+            setIsSubmitting(false);
             return;
           }
           toast.info("Destination account does not exist. This will create a new account.");
@@ -350,14 +326,36 @@ export default function SwapPage() {
         }
       }
       
-      // Create payment transaction
-      setStatusMessage('Creating transaction...');
+      // Step 1: Send XLM to the swap function
+      setStatusMessage('Creating payment transaction to issuer...');
+      
+      // Create payment transaction to send XLM from user to SLR_ISSUER_WALLET
+      // IMPORTANT: In a real implementation, first check if the recipient has a trustline for SLR,
+      // and if not, ask them to create one. This implementation assumes they have one already.
+      
+      // Calculate estimated SLR amount
+      const estimatedSlrAmount = calculateSLRAmount(fromAmount);
+      
+      // First check if user has trustline for SLR
+      if (!hasTrustline) {
+        setStatusMessage('Recipient needs to establish a trustline for SLR tokens...');
+        
+        // Note: In a real implementation, you would have a way for the recipient to 
+        // create a trustline. For now, we'll just inform the user.
+        toast.error("Recipient needs to establish a trustline for SLR tokens");
+        setTxStatus('error');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Create payment transaction to send XLM to issuer wallet
+      setStatusMessage('Creating transaction to send XLM...');
       const { transaction, network_passphrase } = await createPaymentTransaction({
         source: publicKey,
-        destination: actualRecipient,
+        destination: SLR_ISSUER_WALLET, // Send to SLR issuer wallet
         amount: fromAmount,
-        asset: selectedAsset.id,
-        memo: `Swap ${selectedAsset.symbol} to USDC`
+        asset: "native", // XLM
+        memo: `For:${actualRecipient.substring(0, 20)}` // Shortened memo with recipient reference
       });
       
       // Sign the transaction
@@ -368,36 +366,47 @@ export default function SwapPage() {
       } as any);
       
       // Submit transaction to network
-      setStatusMessage('Submitting transaction to the network...');
-      const result = await submitTransaction(signedTransaction);
+      setStatusMessage('Submitting XLM payment to the network...');
+      const xlmPaymentResult = await submitTransaction(signedTransaction);
       
-      // Record the transaction in history
-      const recipientUsername = recipient.startsWith('@') ? recipient.substring(1) : undefined;
+      // Step 2: Issue SLR tokens to the recipient
+      setStatusMessage('Processing SLR token swap...');
+      const swapResult = await swapXlmForSlr(
+        fromAmount, 
+        actualRecipient, 
+        `From:${publicKey.substring(0, 20)}` // Shortened memo
+      );
       
-      const newSwap: SwapHistory = {
-        id: `swap-${Date.now()}`,
-        fromAsset: selectedAsset.symbol,
-        toAsset: "USDC",
-        fromAmount,
-        toAmount: estimatedUsdcAmount,
-        date: new Date().toISOString(),
-        recipient: actualRecipient,
-        recipientUsername,
-        status: 'completed',
-        txId: result?.hash
-      };
-      
-      setSwapHistory([newSwap, ...swapHistory]);
-      setTxStatus('success');
-      setStatusMessage(`Successfully sent ${fromAmount} ${selectedAsset.symbol}`);
-      toast.success(`Successfully sent ${fromAmount} ${selectedAsset.symbol}`);
-      
-      // Reset form
-      setFromAmount("");
-      
-      // Refresh balances
-      setTimeout(fetchBalances, 3000);
-      
+      if (swapResult.success) {
+        // Record the transaction in history
+        const recipientUsername = recipient.startsWith('@') ? recipient.substring(1) : undefined;
+        
+        const newSwap: SwapHistory = {
+          id: `swap-${Date.now()}`,
+          fromAsset: "XLM",
+          toAsset: "SLR",
+          fromAmount,
+          toAmount: swapResult.slrAmount,
+          date: new Date().toISOString(),
+          recipient: actualRecipient,
+          recipientUsername,
+          status: 'completed',
+          txId: swapResult.txHash
+        };
+        
+        setSwapHistory([newSwap, ...swapHistory]);
+        setTxStatus('success');
+        setStatusMessage(`Successfully swapped ${fromAmount} XLM for ${swapResult.slrAmount} SLR`);
+        toast.success(`Successfully swapped ${fromAmount} XLM for ${swapResult.slrAmount} SLR`);
+        
+        // Reset form
+        setFromAmount("");
+        
+        // Refresh balances
+        setTimeout(fetchBalances, 3000);
+      } else {
+        throw new Error(swapResult.error || "Swap failed");
+      }
     } catch (error: any) {
       console.log("Swap error:", error);
       setTxStatus('error');
@@ -410,9 +419,9 @@ export default function SwapPage() {
         const failedSwap: SwapHistory = {
           id: `swap-failed-${Date.now()}`,
           fromAsset: getSelectedFromAsset()!.symbol,
-          toAsset: "USDC",
+          toAsset: "SLR",
           fromAmount,
-          toAmount: calculateUSDCAmount(fromAmount),
+          toAmount: calculateSLRAmount(fromAmount),
           date: new Date().toISOString(),
           recipient: resolvedRecipient || recipient,
           recipientUsername,
@@ -420,18 +429,18 @@ export default function SwapPage() {
         };
         setSwapHistory([failedSwap, ...swapHistory]);
       }
-    } finally {
-      setIsSubmitting(false);
     }
+    
+    setIsSubmitting(false);
   };
   
-  // Calculate estimated USDC amount from the current input
-  const estimatedUsdcAmount = calculateUSDCAmount(fromAmount);
+  // Calculate estimated SLR amount from the current input
+  const estimatedSlrAmount = calculateSLRAmount(fromAmount);
   
   return (
     <div className="container mx-auto space-y-8 py-8">
       <Particles />
-      <h1 className="text-3xl font-bold tracking-tight">Swap Tokens</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Swap XLM for SLR</h1>
       
       {/* Status Messages */}
       {statusMessage && (
@@ -449,9 +458,9 @@ export default function SwapPage() {
         <div className="col-span-1 md:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Swap Tokens to USDC</CardTitle>
+              <CardTitle>Swap XLM for SLR Tokens</CardTitle>
               <CardDescription>
-                Send tokens to someone and they'll receive USDC via atomic swap
+                Send XLM and the recipient will receive SLR tokens
               </CardDescription>
             </CardHeader>
             <form onSubmit={handleSwap}>
@@ -467,6 +476,21 @@ export default function SwapPage() {
                     }}
                     placeholder="Enter public key or username"
                   />
+                  {resolvedRecipient && !hasTrustline && (
+                    <div className="mt-2 text-sm text-amber-500">
+                      Warning: Recipient doesn't have a trustline for SLR tokens.
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        className="ml-2" 
+                        onClick={createTrustline}
+                        disabled={isSubmitting}
+                      >
+                        Create Trustline
+                      </Button>
+                    </div>
+                  )}
                 </div>
               
                 {/* From Asset */}
@@ -500,15 +524,18 @@ export default function SwapPage() {
                         <SelectValue placeholder="Select asset" />
                       </SelectTrigger>
                       <SelectContent>
-                        {userAssets.map(asset => (
-                          <SelectItem key={asset.id} value={asset.id}>
-                            <div className="flex items-center gap-2">
-                              <span>{asset.symbol}</span>
-                              <span className="text-muted-foreground text-xs">
-                                {parseFloat(asset.balance).toFixed(4)}
-                              </span>
-                            </div>
-                          </SelectItem>
+                        {/* Only show XLM for now as we only support XLM to SLR swap */}
+                        {userAssets
+                          .filter(asset => asset.id === "native")
+                          .map(asset => (
+                            <SelectItem key={asset.id} value={asset.id}>
+                              <div className="flex items-center gap-2">
+                                <span>{asset.symbol}</span>
+                                <span className="text-muted-foreground text-xs">
+                                  {parseFloat(asset.balance).toFixed(4)}
+                                </span>
+                              </div>
+                            </SelectItem>
                         ))}
                         {isLoadingAssets && (
                           <div className="flex justify-center p-2">
@@ -531,38 +558,38 @@ export default function SwapPage() {
                   </div>
                 </div>
                 
-                {/* To Asset (USDC) */}
+                {/* To Asset (SLR) */}
                 <div className="rounded-xl border bg-muted/20 p-4">
                   <div className="flex justify-between mb-2">
-                    <Label className="text-sm font-medium">To (USDC)</Label>
+                    <Label className="text-sm font-medium">To (SLR)</Label>
                   </div>
                   
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      value={estimatedUsdcAmount}
+                      value={estimatedSlrAmount}
                       readOnly
                       className="w-full bg-transparent text-2xl font-medium focus:outline-none"
                       placeholder="0.00"
                     />
                     
                     <div className="min-w-[140px] flex items-center gap-2 justify-center border rounded-md px-3">
-                      <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">$</div>
-                      <span>USDC</span>
+                      <div className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs">S</div>
+                      <span>SLR</span>
                     </div>
                   </div>
                   
                   <div className="text-xs text-muted-foreground mt-2">
-                    USD Coin - Stellar token
+                    Stellera Token - SLR
                   </div>
                 </div>
                 
                 {/* Price Info & Slippage */}
                 <div className="bg-muted/20 rounded-md p-3 text-sm">
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Estimated Rate</span>
+                    <span className="text-muted-foreground">Conversion Rate</span>
                     <span className="font-medium">
-                      1 {getSelectedFromAsset()?.symbol || "XLM"} ≈ 0.12 USDC
+                      1 XLM = 0.5 SLR
                     </span>
                   </div>
                   <div className="flex justify-between items-center mt-2">
@@ -583,7 +610,7 @@ export default function SwapPage() {
                   <div className="flex justify-between items-center mt-2">
                     <span className="text-muted-foreground">Minimum Received</span>
                     <span className="font-medium">
-                      {calculateMinAmount(estimatedUsdcAmount, slippage)} USDC
+                      {calculateMinAmount(estimatedSlrAmount, slippage)} SLR
                     </span>
                   </div>
                 </div>
@@ -610,11 +637,11 @@ export default function SwapPage() {
                         ? 'Enter Amount' 
                         : parseFloat(fromAmount) > parseFloat(getMaxBalance())
                           ? 'Insufficient Balance'
-                          : isSubmitting
-                            ? 'Processing...'
-                            : contractClient
-                              ? 'Atomic Swap with USDC'
-                              : 'Swap'}
+                          : !hasTrustline
+                            ? 'Recipient Needs SLR Trustline'
+                            : isSubmitting
+                              ? 'Processing...'
+                              : 'Swap XLM for SLR'}
                 </Button>
               </CardFooter>
             </form>
@@ -694,8 +721,8 @@ export default function SwapPage() {
                     <div key={asset.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                          {asset.symbol === "USDC" ? (
-                            <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">$</div>
+                          {asset.symbol === "SLR" ? (
+                            <div className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs">S</div>
                           ) : (
                             <span className="text-xs font-bold">{asset.symbol}</span>
                           )}

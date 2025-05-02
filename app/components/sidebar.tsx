@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -84,29 +85,84 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <div className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col md:flex">
-      {/* Sidebar backdrop - more solid background */}
-      <div className="absolute inset-0 bg-background/95"></div>
-      
-      <div className="relative flex h-full flex-col border-r border-white/60 border-border/50">
-        {/* App Logo & Name */}
-        <div className="flex h-16 items-center px-6">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="rounded-full bg-primary/10 p-1">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary">
-                <circle cx="12" cy="12" r="10" />
-                <path d="m6 12 6-6 6 6" />
-                <path d="m6 12 6 6 6-6" />
-              </svg>
-            </div>
-            <span className="text-xl font-semibold bg-gradient-to-r from-purple-500 to-indigo-500 bg-clip-text text-transparent">
-              Stellera
-            </span>
-          </Link>
-        </div>
+    <>
+      {/* Desktop sidebar - hidden on mobile */}
+      <div className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col md:flex">
+        {/* Sidebar backdrop - more solid background */}
+        <div className="absolute inset-0 bg-background/95"></div>
         
-        {/* Navigation */}
-        <nav className="mt-4 flex-1 space-y-1 px-4">
+        <div className="relative flex h-full flex-col border-r border-white/60 border-border/50">
+          {/* App Logo & Name */}
+          <div className="flex h-16 items-center px-6">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="rounded-full bg-primary/10 p-1">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="m6 12 6-6 6 6" />
+                  <path d="m6 12 6 6 6-6" />
+                </svg>
+              </div>
+              <span className="text-xl font-semibold bg-gradient-to-r from-purple-500 to-indigo-500 bg-clip-text text-transparent">
+                Stellera
+              </span>
+            </Link>
+          </div>
+          
+          {/* Navigation */}
+          <nav className="mt-4 flex-1 space-y-1 px-4">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href
+              
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-primary/10 ${
+                    isActive
+                      ? "bg-primary/20 text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span className={`mr-3 transition-colors ${isActive ? "text-primary" : ""}`}>
+                    {item.icon}
+                  </span>
+                  {item.title}
+                  {isActive && (
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary"></span>
+                  )}
+                </Link>
+              )
+            })}
+          </nav>
+          
+          {/* User Profile */}
+          <div className="mt-auto mb-4 px-4">
+            <div className="rounded-xl p-4 bg-muted/80 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="rounded-full overflow-hidden h-10 w-10 bg-primary/20 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-primary">
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </div>
+                <div className="overflow-hidden">
+                  <div className="truncate text-sm font-medium">G...5ADG</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 text-emerald-500">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                      Connected
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile bottom navigation - visible only on mobile */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden border-t border-border/50 bg-background/95 backdrop-blur">
+        <nav className="flex w-full justify-around">
           {navItems.map((item) => {
             const isActive = pathname === item.href
             
@@ -114,47 +170,26 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-primary/10 ${
+                className={`flex flex-col items-center py-3 px-2 ${
                   isActive
-                    ? "bg-primary/20 text-primary"
+                    ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <span className={`mr-3 transition-colors ${isActive ? "text-primary" : ""}`}>
-                  {item.icon}
+                <span className={`transition-colors ${isActive ? "text-primary" : ""}`}>
+                  {/* Make icons bigger for better touch targets on mobile */}
+                  <span className="flex h-7 w-7 items-center justify-center">
+                    {React.cloneElement(item.icon, { className: "h-5 w-5" })}
+                  </span>
                 </span>
-                {item.title}
                 {isActive && (
-                  <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary"></span>
+                  <span className="h-1 w-1 rounded-full bg-primary mt-0.5"></span>
                 )}
               </Link>
             )
           })}
         </nav>
-        
-        {/* User Profile */}
-        <div className="mt-auto mb-4 px-4">
-          <div className="rounded-xl p-4 bg-muted/80 shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full overflow-hidden h-10 w-10 bg-primary/20 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-primary">
-                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </div>
-              <div className="overflow-hidden">
-                <div className="truncate text-sm font-medium">G...5ADG</div>
-                <div className="truncate text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1 text-emerald-500">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                    Connected
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
-    </div>
+    </>
   )
-} 
+}
